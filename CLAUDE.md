@@ -64,11 +64,13 @@ source ~/.codex/model-tiers.env   # CODEX_MODEL_FRONTIER / _BALANCED / _FAST
 | 難度が高い・フロンティア級 | `$CODEX_MODEL_FRONTIER` / `-p frontier-high` | `high`〜`xhigh`(必要なら`ultra`/`max`) |
 
 ```bash
-codex exec --sandbox workspace-write --approve-for-me -p fast-low          "..."
-codex exec --sandbox workspace-write --approve-for-me -p balanced-medium   "..."
-codex exec --sandbox workspace-write --approve-for-me -p frontier-high     "..."
-# または: codex exec --sandbox workspace-write --approve-for-me -m "$CODEX_MODEL_FRONTIER" -c model_reasoning_effort="xhigh" "..."
+codex exec --approve-for-me -p fast-low          "..."
+codex exec --approve-for-me -p balanced-medium   "..."
+codex exec --approve-for-me -p frontier-high     "..."
+# または: codex exec --approve-for-me -m "$CODEX_MODEL_FRONTIER" -c model_reasoning_effort="xhigh" "..."
 ```
+
+`--approve-for-me`はworkspace-writeサンドボックスを内包しており、`--sandbox`とは併用できない(併用するとエラーで起動しない)。
 
 `CODEX_MODEL_FALLBACK=1`の場合は判別失敗(現行デフォルト1本にフォールバック済み)。何も指定しなければbase設定のまま(`~/.codex/config.toml`、現状`sol`/`xhigh`)。
 

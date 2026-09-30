@@ -64,9 +64,31 @@ Three tiers, by audience:
 - `~/.codex/AGENTS.md`: Codex CLI's own global rules file — Codex has no `@file`
   import mechanism and doesn't recognize `~/AGENTS.md` as a location at all, so
   whichever of the universal principles above are meant to bind Codex too have to be
-  hand-duplicated there (see `ai-agent-config/` in the mac-setup repo for the
+  hand-duplicated there (see `setup/ai-agent-config/` in the mactl repo for the
   mechanics). It otherwise carries persona/style rules that are specific to Codex and
   don't belong here.
+
+### 2026-09-02 — Work out how cost scales with N before dispatching a parallelization/architecture change
+
+When proposing or approving an implementation that touches performance or scaling
+(parallelization, sharding, batching, caching), write out algebraically how each
+participant's cost scales with the relevant size parameter(s) *before* dispatching
+the implementation — specifically check for a straggler/worst-case actor whose cost
+grows with its position or index instead of staying `O(N/W)`. A small-scale test
+passing is not a substitute for this: it can look like a real win while hiding an
+asymptotic problem that only bites at the actual target scale.
+
+Concrete case: parallelizing a video-frame-capture pipeline across W workers by
+contiguous frame ranges, where correctness required each worker to replay all prior
+frames from 0 before starting its own range (to rebuild a piece of animation state
+that only holds if built up frame-by-frame). The last worker's replay cost is
+`(W-1)/W` of the *entire* original sequential job — fully predictable on paper, no
+test needed — yet it only surfaced after implementing and testing at a small frame
+count, where the effect was still small enough to look like a real (if modest) win.
+The scale-invariant fix (every worker walks the full range but only captures its own
+slice) has a cost ratio that stays constant regardless of N; verify that kind of
+claim the same way, by reasoning about the ratio's behavior as N grows, not by
+retesting at one more arbitrary N and hoping it generalizes.
 
 ## Domain-specific knowledge index
 
