@@ -64,7 +64,7 @@ Three tiers, by audience:
 - `~/.codex/AGENTS.md`: Codex CLI's own global rules file — Codex has no `@file`
   import mechanism and doesn't recognize `~/AGENTS.md` as a location at all, so
   whichever of the universal principles above are meant to bind Codex too have to be
-  hand-duplicated there (see `ai-agent-config/` in the mac-setup repo for the
+  hand-duplicated there (see `setup/ai-agent-config/` in the mactl repo for the
   mechanics). It otherwise carries persona/style rules that are specific to Codex and
   don't belong here.
 

@@ -1,0 +1,39 @@
+#!/bin/zsh
+set -eu
+
+# :A follows the installed symlink, including paths containing spaces.
+repo_root="${0:A:h:h}"
+assume_yes=0
+make_args=()
+while (( $# )); do
+  case "$1" in
+    -y|--yes) assume_yes=1 ;;
+    -h|--help) make_args+=(help) ;;
+    --deep)
+      if (( ${#make_args[@]} == 1 )) && [[ "${make_args[1]}" == clean ]]; then
+        shift
+        # Do not interpret any cleanup flags (especially --help / --apply).
+        exec "$repo_root/cleanup/mac-cleanup.sh" "$@"
+      fi
+      make_args+=("$1")
+      ;;
+    *) make_args+=("$1") ;;
+  esac
+  shift
+done
+
+if (( ${#make_args[@]} == 0 )) || [[ "${make_args[1]}" == *=* ]]; then
+  make_args=(maintain "${make_args[@]}")
+fi
+if (( assume_yes )); then
+  make_args+=(YES=1)
+fi
+
+gmake=/opt/homebrew/opt/make/libexec/gnubin/make
+if [[ ! -x "$gmake" ]]; then
+  gmake="$(command -v gmake)" || {
+    print -u2 'GNU Make is required (Homebrew: brew install make).'
+    exit 127
+  }
+fi
+exec "$gmake" --no-print-directory -f "$repo_root/Makefile" "${make_args[@]}"

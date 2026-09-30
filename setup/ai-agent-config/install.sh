@@ -10,7 +10,7 @@
 set -euo pipefail
 
 SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SRC_DIR/.." && pwd)"
+REPO_ROOT="$(cd "$SRC_DIR/../.." && pwd)"
 CLAUDE_DIR="$HOME/.claude"
 
 # ---------------------------------------------------------------------------

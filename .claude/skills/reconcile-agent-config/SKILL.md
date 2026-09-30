@@ -1,11 +1,11 @@
 ---
 name: reconcile-agent-config
-description: mac-setupリポジトリ専用。~/AGENTS.md・~/.claude/CLAUDE.md・~/.codex/AGENTS.mdという「このMac上で生きている」実体と、このリポジトリ側のスナップショット(AGENTS.md / CLAUDE.md / ai-agent-config/codex-AGENTS.md)が食い違っていないか調べ、どちらを採用するか、あるいは両方の変更を1本に統合(止揚)するかを判断して両側に書き戻す。
+description: mactlリポジトリ専用。~/AGENTS.md・~/.claude/CLAUDE.md・~/.codex/AGENTS.mdという「このMac上で生きている」実体と、このリポジトリ側のスナップショット(AGENTS.md / CLAUDE.md / setup/ai-agent-config/codex-AGENTS.md)が食い違っていないか調べ、どちらを採用するか、あるいは両方の変更を1本に統合(止揚)するかを判断して両側に書き戻す。
 ---
 
 # reconcile-agent-config
 
-`mac-setup`リポジトリ専用のスキル。他のプロジェクトにコピーしても対象パスが存在しないので意味を持たない。
+`mactl`リポジトリ専用のスキル。他のプロジェクトにコピーしても対象パスが存在しないので意味を持たない。
 
 対象は以下3組。「repo側」がこのリポジトリのスナップショット、「live側」がこのMac上で実際に読み込まれている実体:
 
@@ -13,13 +13,13 @@ description: mac-setupリポジトリ専用。~/AGENTS.md・~/.claude/CLAUDE.md�
 |---|---|
 | `AGENTS.md` | `~/AGENTS.md` |
 | `CLAUDE.md` | `~/.claude/CLAUDE.md` |
-| `ai-agent-config/codex-AGENTS.md` | `~/.codex/AGENTS.md` |
+| `setup/ai-agent-config/codex-AGENTS.md` | `~/.codex/AGENTS.md` |
 
 (`~/.claude/AGENTS.md`は`~/AGENTS.md`へのsymlinkなので、比較対象に含めない。Antigravity CLI(`agy`)がここに無いのは対象外にしているからではなく、agyにはグローバルRulesスコープという概念自体が無く、比較すべき「live側のグローバルファイル」が存在しないため。詳細は`ai-agent-config.md`を参照)
 
 ## 手順
 
-1. `ai-agent-config/diff-ai-agent-config.sh`を実行する。これは3組それぞれの機械的diffを出すだけの部分で、判断はしない(このスキルを介さず単体でも実行できる)。exit 0なら全組一致、以降の手順は不要。
+1. `setup/ai-agent-config/diff-ai-agent-config.sh`を実行する。これは3組それぞれの機械的diffを出すだけの部分で、判断はしない(このスキルを介さず単体でも実行できる)。exit 0なら全組一致、以降の手順は不要。
 2. 差分がある組について、diffのhunkごとに次のどれかを判断する:
    - **repo側を採用**: live側の変更がこのMac固有の一時的な事情によるもので、他Macへ配る価値が無い場合
    - **live側を採用**: repo側が単に古いだけで、live側の変更こそが最新の意図を反映している場合
@@ -31,6 +31,6 @@ description: mac-setupリポジトリ専用。~/AGENTS.md・~/.claude/CLAUDE.md�
 
 ## 判断時の追加ルール
 
-- `ai-agent-config/ai-agent-config.md`の「注意点」に、設定文面はマシン固有の事実(利用プランの有無など)をベタ書きしないという方針が明記されている。live側でこの方針に反する記述(特定マシンにしか当てはまらない断定)が増えていた場合は、統合時にrepo側の一般化された書き方を優先する。
+- `setup/ai-agent-config/ai-agent-config.md`の「注意点」に、設定文面はマシン固有の事実(利用プランの有無など)をベタ書きしないという方針が明記されている。live側でこの方針に反する記述(特定マシンにしか当てはまらない断定)が増えていた場合は、統合時にrepo側の一般化された書き方を優先する。
 - `~/AGENTS.md`と`~/.codex/AGENTS.md`は内容が一部重複する別ファイル。CodexはグローバルスコープとしてCODEX_HOME直下の`AGENTS.md`しか見ず、`~/AGENTS.md`という場所自体を認識しないため、共通ルールの統合は両方に手で反映する必要がある。片方だけの変更を見つけたらもう片方への反映漏れを疑う。
-- Codexは上記のグローバル指示とは別に、作業中のリポジトリのgitルートから作業ディレクトリまでを遡って`AGENTS.md`を自動検出・連結する。`mac-setup`リポジトリ内で作業している間はrepo側の`AGENTS.md`がこの経路でも直接読まれているので、repo側を書き換えた場合はその場で意図通りの内容になっているかを意識する。
+- Codexは上記のグローバル指示とは別に、作業中のリポジトリのgitルートから作業ディレクトリまでを遡って`AGENTS.md`を自動検出・連結する。`mactl`リポジトリ内で作業している間はrepo側の`AGENTS.md`がこの経路でも直接読まれているので、repo側を書き換えた場合はその場で意図通りの内容になっているかを意識する。

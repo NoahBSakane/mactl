@@ -23,20 +23,20 @@ Claude Code / Codex CLIには、モデル選択方針・外部CLI(Codex/Gemini C
 
 `~/AGENTS.md`自身の末尾にもこの関係性の説明が書いてある。
 
-なお、CodexとAntigravity CLI(`agy`)はどちらも、作業中のリポジトリのgitルートから作業ディレクトリまでを遡って`AGENTS.md`(agyは`GEMINI.md`も)を自動検出・連結する仕組みを持つ。つまりこの`mac-setup`リポジトリで作業している間は、Codexは上の`~/.codex/AGENTS.md`(グローバル)とリポジトリ直下の`AGENTS.md`(プロジェクトスコープとして自動検出)の両方を読んでおり、`~/.codex/AGENTS.md`への手動転記が意味を持つのは、あくまでmac-setupの外・他プロジェクトで作業する時だけになる。agyも同じ自動検出は持つが、Skills/Plugins/MCPと違ってRules(`AGENTS.md`/`GEMINI.md`)にはグローバルスコープという概念自体が無く、`~/AGENTS.md`を持たせても他プロジェクトからは参照されない。共通ルールの対象を「Claude Code / Codex CLI」の2つに絞っているのはこのため。
+なお、CodexとAntigravity CLI(`agy`)はどちらも、作業中のリポジトリのgitルートから作業ディレクトリまでを遡って`AGENTS.md`(agyは`GEMINI.md`も)を自動検出・連結する仕組みを持つ。つまりこの`mactl`リポジトリで作業している間は、Codexは上の`~/.codex/AGENTS.md`(グローバル)とリポジトリ直下の`AGENTS.md`(プロジェクトスコープとして自動検出)の両方を読んでおり、`~/.codex/AGENTS.md`への手動転記が意味を持つのは、あくまでmactlの外・他プロジェクトで作業する時だけになる。agyも同じ自動検出は持つが、Skills/Plugins/MCPと違ってRules(`AGENTS.md`/`GEMINI.md`)にはグローバルスコープという概念自体が無く、`~/AGENTS.md`を持たせても他プロジェクトからは参照されない。共通ルールの対象を「Claude Code / Codex CLI」の2つに絞っているのはこのため。
 
 ## 設置先とコード
 
 ```
-mac-setup/
+mactl/
   AGENTS.md                    → 設置先: ~/AGENTS.md(repo直下にある理由はルートのREADMEを参照)
   CLAUDE.md                    → 設置先: ~/.claude/CLAUDE.md(同上)
-  ai-agent-config/
+  setup/ai-agent-config/
     ai-agent-config.md         → このファイル
     codex-AGENTS.md            → 設置先: ~/.codex/AGENTS.md
     install.sh                 → 上記3つの配置(+ ~/.claude/AGENTS.mdのsymlink作成)と、下記hook
                                   スクリプトの配置・~/.claude/settings.jsonへのマージを1本で行う
-                                  インストーラ(AGENTS.md/CLAUDE.mdは一つ上の階層=repo直下から読む)
+                                  インストーラ(AGENTS.md/CLAUDE.mdは二つ上の階層=repo直下から読む)
     diff-ai-agent-config.sh    → repo側とlive側、3組それぞれの機械的diffを取るだけのスクリプト
 ```
 
@@ -47,18 +47,18 @@ mac-setup/
 普段の編集はClaude Code/Codexとの対話中に`~/.claude/CLAUDE.md`等を直接書き換える形で行われる。このリポジトリ側のファイルは自動追従しないので、他Macへ配る前に必ず最新を取り込む:
 
 ```bash
-cd mac-setup
+cd mactl
 cp ~/AGENTS.md ./AGENTS.md
 cp ~/.claude/CLAUDE.md ./CLAUDE.md
-cp ~/.codex/AGENTS.md ./ai-agent-config/codex-AGENTS.md
+cp ~/.codex/AGENTS.md ./setup/ai-agent-config/codex-AGENTS.md
 ```
 
-これは単純な上書きコピーなので、repo側にしか無い変更(他Macで直接編集した等)を吹き飛ばす可能性がある。食い違いがないか先に確認したい・あるいはどちらか一方を採用するか統合するか判断したい場合は、`/reconcile-agent-config`スキル([.claude/skills/reconcile-agent-config/](../.claude/skills/reconcile-agent-config/SKILL.md))を使う。
+これは単純な上書きコピーなので、repo側にしか無い変更(他Macで直接編集した等)を吹き飛ばす可能性がある。食い違いがないか先に確認したい・あるいはどちらか一方を採用するか統合するか判断したい場合は、`/reconcile-agent-config`スキル([.claude/skills/reconcile-agent-config/](../../.claude/skills/reconcile-agent-config/SKILL.md))を使う。
 
 ### 他Macへ持っていく(リポジトリ → 生きているファイル)
 
-1. `git clone`(または既存クローンなら`git pull`)で他Macへこの`mac-setup`リポジトリを持ってくる
-2. 転送先で`mac-setup/ai-agent-config/install.sh`を実行する。これ1本で指示ファイルの配置と委譲hookの設置の両方を行う
+1. `git clone`(または既存クローンなら`git pull`)で他Macへこの`mactl`リポジトリを持ってくる
+2. 転送先で`mactl/setup/ai-agent-config/install.sh`を実行する。これ1本で指示ファイルの配置と委譲hookの設置の両方を行う
 
 ## 注意点
 

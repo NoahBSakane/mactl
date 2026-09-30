@@ -3,7 +3,7 @@
 # AI-agent-config files?" check. Just diffs each of the 3 repo/live pairs and
 # reports; makes no judgment about which side to keep. For the judgment half
 # (decide which side wins, or synthesize both into one), see the
-# reconcile-agent-config skill: ../.claude/skills/reconcile-agent-config/SKILL.md
+# reconcile-agent-config skill: ../../.claude/skills/reconcile-agent-config/SKILL.md
 #
 # ~/.claude/AGENTS.md is intentionally excluded: it's a symlink to ~/AGENTS.md,
 # so it's identical to that pair by construction and has nothing to diff.
@@ -13,13 +13,13 @@
 
 set -uo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # repo path : live path
 PAIRS=(
   "$REPO_ROOT/AGENTS.md:$HOME/AGENTS.md"
   "$REPO_ROOT/CLAUDE.md:$HOME/.claude/CLAUDE.md"
-  "$REPO_ROOT/ai-agent-config/codex-AGENTS.md:$HOME/.codex/AGENTS.md"
+  "$REPO_ROOT/setup/ai-agent-config/codex-AGENTS.md:$HOME/.codex/AGENTS.md"
 )
 
 status=0
