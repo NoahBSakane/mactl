@@ -51,10 +51,10 @@ cd ~/Repo/mac-setup/ai-agent-config
 
 端末でない実行(パイプやcronなど)で `-y`/`-Y` が無いと、計画を表示するだけで実行しません。
 
-`DRIFT` の行があると、何も変更せずに中止します。新しいMacで、すでに指示ファイルが存在する場合は、初回は `DRIFT` になるのが普通です。次の順に進めてください。
+`DRIFT` の行があると、何も変更せずに中止します。まっさらなMacなら、初回は `MISSING`(未配備)になるだけで、そのまま配備できます。すでに指示ファイルがあるMacでは、初回は `DRIFT` になるのが普通です。その場合は、次の順に進めてください。
 
 1. `./diff-ai-agent-config.sh` で、差分(失われる内容)を確認する。
-2. 取り込みたい内容があれば、先にリポジトリ側へ反映する(Claude Code で `/reconcile-agent-config` を使う)。
+2. そのMacの指示ファイルに、残したい内容があれば、先にリポジトリ側へ反映する(まだ何も配備していないMacでは、手で `src/` に書き写すか、いったん配備したあとで Claude Code に `/reconcile-agent-config` を頼む)。
 3. 内容を確認済みなら、`./install.sh -f` で上書きする。
 
 上書きする前の内容は、毎回 `~/.agent-state/backups/<時刻>/` に退避されます。
@@ -81,9 +81,9 @@ cd ~/Repo/mac-setup/ai-agent-config
 ### Claude Code
 
 - 配備すると、`~/.claude/settings.json` の `permissions.defaultMode`(自動モード `auto`)と `skillOverrides`(使わない同期skillの無効化)が、リポジトリの値で**上書きされる**。手で変えた値は、次の `install.sh` で戻る(`diff-ai-agent-config.sh` は `UPDATE` と報告する)。変えたい場合は `src/claude-settings-enforced.json` を直す。他のキーは触らない。
-- 使用上限の自動再開は、設定 `autoContinueAtUsageLimit`(既定で有効)です。`/config` に「Continue automatically at usage limit」の行が出る環境と出ない環境があります(出ない環境があることを確認済み)。出ない環境では、設定を足さずに既定に任せ、待てないときは `orchestrate-agents` skill の `failover.md` に従います。
+- 使用上限の自動再開は、設定 `autoContinueAtUsageLimit`(既定で有効)です。`/config` に「Continue automatically at usage limit」の行が出る環境と出ない環境があります(出ない環境があることを確認済み)。出ない環境では、設定を足さずに既定に任せ、待てないときは `~/.agents/skills/orchestrate-agents/references/failover.md` に従います。
 - 新しいセッションを開く。実行中のセッションは起動時の指示を保持しているため、新しい指示とhookは新しいセッションから確実に有効になります。
-- お風呂モード(`/ofuro`)で無人運転する前に、権限モードを auto にする(`Shift+Tab`)。
+- 離席中に自動で進めるお風呂モード(`/ofuro`)を使う前に、権限モードを auto にする(`Shift+Tab`)。
 
 ### Codex
 
@@ -99,7 +99,7 @@ agy -p "あなたが使えるskillの名前を列挙して" --model gemini-3.8-f
 
 ### Muse Code
 
-- 使う場合だけ、`muse login` を実行する(または環境変数 `META_API_KEY` を設定する)。ログインすると契約層の選択が関わるため、内容を確認してから行ってください。
+- 使う場合だけ、`muse login` を実行する(または環境変数 `META_API_KEY` を設定する)。ログインのときに契約プランの選択を求められる可能性があるため、画面の案内を確認してから進めてください。
 - Muse は、他のエージェントの個人rules(`~/.claude/CLAUDE.md`、無ければ `~/.codex/AGENTS.md`)を自動で取り込みますが、`@AGENTS.md` の import は解決しません。そのため `install.sh` は、この自動取り込みを設定で止め、Muse専用のrules(`~/.config/muse/AGENTS.md`)に共通ルールを置きます。
 
 ### Grok Build
@@ -108,7 +108,7 @@ agy -p "あなたが使えるskillの名前を列挙して" --model gemini-3.8-f
 
 ## 日常の運用
 
-- **ルールを足す・変える:** エージェントは、配備された指示ファイルを直接編集できません(hookが拒否します)。`propose-rule` で提案が `~/.knowledge/rule-proposals.md` に溜まり、リマインドが知らせたら、`triage-rules` で検討して、承認した内容を `src/` に反映します。
+- **ルールを足す・変える:** エージェントは、配備された指示ファイルを直接編集できません(hookが拒否します)。エージェントが `propose-rule` skill で提案を `~/.knowledge/rule-proposals.md` に溜め、リマインドが知らせたら、`triage-rules` skill(エージェントに「提案を検討して」と頼む)で検討して、承認した内容を `src/` に反映します。
 - **指示ファイルを直す:** 共通ルールは `src/shared-rules.md` だけを直し、`./install.sh` で `~/AGENTS.md` へ反映する(他のエージェントは、そのsymlink経由で同じファイルを読む)。live 側を直接編集した場合は、`/reconcile-agent-config` でリポジトリへ取り込む。
 - **台帳を更新する:** probe が「確認が14日を超えた」と知らせたら、区切りの良いところで `refresh-registry` skill を実行する。
 - **離席する:** `/ofuro [時間] [任務]`。時間を指定しなければ2時間。戻ったら、`~/.agent-state/ofuro-report-*.md` のレポートを確認する。
@@ -134,3 +134,25 @@ agy -p "あなたが使えるskillの名前を列挙して" --model gemini-3.8-f
 | agy で skills が見えない | `~/.gemini/config/skills.json` が絶対パスで登録されているか確認する |
 | probe が `limit` と表示する | 使用上限の期間中。`~/.agent-state/unavailable/<agent>.txt` の期限が過ぎると戻る |
 | hook が誤って止める | `~/.agent-state/` を確認する。hook自体の不具合なら、`./install.sh -r` で戻して報告する |
+
+## このリポジトリを自分で編集して push する場合
+
+- 別のアカウント(フォークなど)で運用するなら、`./setup-git-account.sh <あなたのアカウント>` を実行する。`origin` のURLと、その `gh` アカウントのトークンを使う認証、公開前の検査(push 時の hook)を、このクローンだけに設定する。未ログインなら、端末で `gh auth login -h github.com -p https -w`。
+- 社内名・人名など、公開リポジトリに書けない語は、`~/.config/ai-agent-config/public-denylist.txt`(非公開)に書くと、push 前の検査が止める。
+
+## 用語
+
+この文書と、関連する文書に出てくる言葉です。
+
+| 言葉 | 意味 |
+| --- | --- |
+| live側 | このMacの実際の場所(`~/AGENTS.md` など)に置かれて、エージェントが読んでいるファイル。対して「リポジトリ側」は、この git の中の `src/` |
+| 種(seed) | 最初の1回だけ置かれるファイル。あとは live 側が正本で、使いながら育てる(`install.sh` は上書きしない) |
+| ドリフト(`DRIFT`) | live 側が、前回の配備のあとに(または配備前から)リポジトリと違う内容になっていること |
+| hook | エージェントが何かをする直前・直後に動く小さなスクリプト。許可の確認や記録をする |
+| ゲート | hook のうち、構成の承認が済むまで編集や別エージェントの起動を止めるもの |
+| 配線 | エージェントの設定に hook やリンクを登録して、実際に動く状態にすること |
+| probe(`agents-probe.sh`) | どのエージェントが導入・認証済みで使えるかを、その場で調べるスクリプト |
+| 台帳(`~/.knowledge/ai-agents.md`) | 各エージェントの仕様と、用途ごとの評価(格付けA〜D: A=独立したベンチマーク、B〜C=公式・ベンダーの情報、D=根拠なし)をまとめた文書 |
+| お風呂モード(`/ofuro`) | 離席中に、質問せず推奨案で作業を進めるモード |
+| skill | エージェントが手順どおりに使う、指示の束(`propose-rule` など)。あなたは「提案しておいて」のように頼むだけでよい |

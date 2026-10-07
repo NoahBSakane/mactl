@@ -6,7 +6,7 @@
   public-check.py --pre-push       git pre-push protocol (stdin: local ref/sha, remote ref/sha); used by the hook
   public-check.py --suggest        after a scan, ask one of your agents (agents.conf `ask`, read-only) to
                                    propose generic replacements; printed, never applied
-  public-check.py --localize       list placeholders such as <自分のSlackユーザーID> left in the seeded
+  public-check.py --localise       list placeholders such as <自分のSlackユーザーID> left in the seeded
                                    files; with --agent, start one of your agents to fill them in with you
 
 Mechanical rules (always on): e-mail addresses, Slack IDs, UUIDs, /Users/<name>/ paths, secrets/tokens.
@@ -166,7 +166,7 @@ def suggest(hits):
 PLACEHOLDER = re.compile(r"<[^<>\s]*(?:ID|Id|名|キー|URL)[^<>\s]*>")
 
 
-def localize(use_agent):
+def localise(use_agent):
     kdir = os.path.join(HOME, ".knowledge")
     found = []
     for f in sorted(os.listdir(kdir)) if os.path.isdir(kdir) else []:
@@ -181,7 +181,7 @@ def localize(use_agent):
     for p, n, ph in found:
         print("%s:%d %s" % (p, n, ph))
     if not use_agent:
-        print("\nこの Mac のエージェントに埋めさせるには: public-check.py --localize --agent", file=sys.stderr)
+        print("\nこの Mac のエージェントに埋めさせるには: public-check.py --localise --agent", file=sys.stderr)
         return 0
     prompt = ("~/.knowledge の次のファイルに、この Mac 用に埋めるプレースホルダが残っています。\n" +
               "\n".join("%s:%d %s" % x for x in found) +
@@ -202,8 +202,8 @@ def localize(use_agent):
 
 def main():
     args = sys.argv[1:]
-    if "--localize" in args:
-        return localize("--agent" in args)
+    if "--localise" in args:
+        return localise("--agent" in args)
     rules = RULES + load_deny()
     allow = load_allow()
     if "--pre-push" in args:

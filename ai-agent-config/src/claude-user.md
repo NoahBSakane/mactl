@@ -1,5 +1,6 @@
 <!-- markdownlint-disable-file MD041 -->
 @AGENTS.md
+<!-- 上の `@AGENTS.md` は、共通ルール(~/AGENTS.md)を取り込むための指示行。消さない。 -->
 
 ## Claude Code専用
 

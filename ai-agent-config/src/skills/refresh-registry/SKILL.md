@@ -1,6 +1,6 @@
 ---
 name: refresh-registry
-description: エージェント台帳(~/.knowledge/ai-agents.md)を再調査して更新する。agents-probe.sh が「台帳の確認が14日を超えた」と知らせた時、フラグが消えたという通知が出た時、新しいエージェントや新モデルが出た時に使う。作業を止めずに行い、ユーザーへの中断は重大な変更があった場合だけ。
+description: エージェント台帳(~/.knowledge/ai-agents.md)を再調査して更新する。agents-probe.sh が「台帳の前回の確認から14日を超えた」と知らせた時、フラグが消えたという通知が出た時、新しいエージェントや新モデルが出た時に使う。作業を止めずに行い、ユーザーへの中断は重大な変更があった場合だけ。
 ---
 
 # refresh-registry
@@ -9,7 +9,7 @@ description: エージェント台帳(~/.knowledge/ai-agents.md)を再調査し�
 
 ## 手順
 
-0. **自動調査の提案があれば、それを出発点にする。** 台帳が14日を超えると、バックグラウンドのジョブ(`registry-job.sh`。WebSearch/WebFetchだけを許した、読み取り専用のClaude)が `~/.agent-state/proposals/registry-<日付>.md` に提案レポートを作る。リマインドに「台帳の更新提案が届いています」と出る。提案の内容は**未検証の手掛かり**として扱い、重要な主張は自分で出典を取り直してから反映する。反映が終わったら、そのファイルを `proposals/done/` へ移す。
+0. **自動調査の提案があれば、それを出発点にする。** 台帳が14日を超えると、バックグラウンドのジョブ(`registry-job.sh`。WebSearch/WebFetchだけを許した、読み取り専用のClaude)が `~/.agent-state/proposals/registry-<日付>.md` に提案レポートを作る。リマインドに「台帳の更新提案が届いています」と出る。提案の内容は**未検証の手掛かり**として扱い、重要な主張は自分で出典を取り直してから反映する。反映が終わったら、そのファイルを `~/.agent-state/proposals/done/`(無ければ `mkdir -p` で作る) へ移す。
 1. `~/.knowledge/bin/agents-probe.sh --fresh --check` を実行する。確認日が14日を超えたエージェントと、消えたフラグ(通知)を洗い出す。
 2. 対象のエージェントごとに一次情報を確認する:
    - **公式ドキュメント**(WebFetch。コマンド・フラグ・指示ファイル・skills・hookの仕様)と、手元の `<cmd> --help`。
@@ -22,7 +22,7 @@ description: エージェント台帳(~/.knowledge/ai-agents.md)を再調査し�
    - `flags` コメントは、実在を確認できたフラグだけにする。
    - **代行先の優先順位**(台帳の同名の節)も、最新の指数と、導入・認証・配線の状況から見直す。根拠の数値と日付を、本文ではなく台帳のその節に書く。
 4. 更新したエージェントの `<!-- verified agent=... date=今日 -->` の日付を更新する。
-5. repoの `ai-agent-config/src/agents-registry.md` へは、reconcile-agent-config skill で反映する(急がなくてよい)。
+5. 台帳のこのMacのファイルは `~/.knowledge/ai-agents.md`、リポジトリ側の正本は `ai-agent-config/src/agents-registry.md`(同じ内容の別の場所)。リポジトリ側へは、reconcile-agent-config skill(リポジトリ内の `.claude/skills/`)で反映する(急がなくてよい)。
 
 ## ユーザーを中断する場合(これ以外は静かに更新して作業を続ける)
 

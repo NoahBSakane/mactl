@@ -30,10 +30,10 @@ out="$(pc --diff "HEAD..HEAD")"; [ -z "$out" ] && ok || bad "--diff of an empty 
 # pre-push protocol: a new branch (remote sha all zeros) is checked against origin/main-less history -> whole history
 head="$(g rev-parse HEAD)"; printf 'refs/heads/x %s refs/heads/x %s\n' "$head" 0000000000000000000000000000000000000000 | python3 "$repo/ai-agent-config/public-check.py" --pre-push >/dev/null 2>&1; [ $? = 1 ] && ok || bad "--pre-push blocks a push that adds a hit"
 printf 'refs/heads/x %s refs/heads/x %s\n' "$head" "$head" | python3 "$repo/ai-agent-config/public-check.py" --pre-push >/dev/null 2>&1; [ $? = 0 ] && ok || bad "--pre-push passes when nothing is new"
-# --localize lists placeholders in ~/.knowledge
+# --localise lists placeholders in ~/.knowledge
 mkdir -p "$HOME/.knowledge"; printf 'id <自分のSlackユーザーID> and <TicketsデータベースのID>\n' >"$HOME/.knowledge/w.md"
-out="$(python3 "$repo/ai-agent-config/public-check.py" --localize 2>&1)"; grep -q "自分のSlackユーザーID" <<<"$out" && grep -q "TicketsデータベースのID" <<<"$out" && ok || bad "--localize lists the placeholders"
-rm -f "$HOME/.knowledge/w.md"; out="$(python3 "$repo/ai-agent-config/public-check.py" --localize 2>&1)"; grep -q "ありません" <<<"$out" && ok || bad "--localize with nothing to fill"
+out="$(python3 "$repo/ai-agent-config/public-check.py" --localise 2>&1)"; grep -q "自分のSlackユーザーID" <<<"$out" && grep -q "TicketsデータベースのID" <<<"$out" && ok || bad "--localise lists the placeholders"
+rm -f "$HOME/.knowledge/w.md"; out="$(python3 "$repo/ai-agent-config/public-check.py" --localise 2>&1)"; grep -q "ありません" <<<"$out" && ok || bad "--localise with nothing to fill"
 # --suggest hands the hits to an agent job (stubbed here) and prints what comes back; nothing is edited
 stub="$HOME/stubhooks"; mkdir -p "$stub"; printf '#!/bin/bash\n[ "$1" = ask ] || exit 9\ncat >"%s/prompt.txt"\necho "STUB-SUGGESTION"\n' "$HOME" >"$stub/agent-run.sh"
 printf 'We work for AcmeCorp.\n' >"$repo/f.md"; commit hit2

@@ -49,7 +49,7 @@ logging`/Cloud Console to have access to it at all.
 
 The diagnostic signal was the *absence* of any log entry at all for the broken
 trigger, versus a clear, stack-trace-bearing entry for an unrelated real failure
-(a Gmail authorization error) that happened around the same time on the same project.
+(a Gmail authorisation error) that happened around the same time on the same project.
 Absence of logging = GAS never attempted to invoke the function; a thrown error always
 gets logged when `exceptionLogging: "STACKDRIVER"` is set in `appsscript.json`.
 
@@ -63,7 +63,7 @@ sure you have permission to run the script function.` — this persists even aft
 - a human manually running a function once in the Apps Script IDE and clicking
   through the OAuth consent screen for the project's actual scopes (BigQuery, Drive,
   Sheets, Slides, external requests, etc.) — this only proves the *script* is
-  authorized for that *user*, not that the separate token `clasp run` presents is
+  authorised for that *user*, not that the separate token `clasp run` presents is
   valid
 
 Two distinct, non-obvious gates are actually involved:

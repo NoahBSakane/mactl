@@ -62,7 +62,7 @@ ai-agent-config/tests/install-test.sh              # install/diff/rollbackの一
 
 プロジェクトごとの指示(`AGENTS.md`)や `.claude/settings.json` のように、「各プロジェクトの中」に置きたいファイルは、`project` 行で配ります。
 
-- **行**: `id project src <セレクタ>::<プロジェクト内のパス> cond [flags]`。セレクタは `name=<フォルダ名のglob>`・`remote=<originのURLのglob>`・`all`(全プロジェクト)。
+- **行**: manifest の列は `id`・`mode`(= `project`)・`src`(配るファイル)・`dest`(= `<セレクタ>::<プロジェクト内のパス>`)・`cond`・`flags`(タブ区切り)。セレクタは `name=<フォルダ名のglob>`・`remote=<originのURLのglob>`・`all`(全プロジェクト)。
 - **配る先(プロジェクト)**: プロジェクトルート直下の git リポジトリです。ルートは、環境変数 `AI_CONFIG_PROJECT_ROOTS`(`:` 区切り)、無ければ `~/.config/ai-agent-config/project-roots`(1行1パス)、それも無ければ `~/Repo`・`~/repos`・`~/src`・`~/code`・`~/dev`・`~/projects` と、その1階層下(例: `~/<組織>/Repo`)です。
 - **動作**: 既定は `seed`(無いときだけ置く。プロジェクト側の編集は上書きしない)。`managed` を付けると `copy` と同じで、テンプレートと同一に保ち、編集されたものはドリフトとして報告します(`-f` で戻す)。行は、プロジェクトごとに `id@フォルダ名` の1行として展開されるので、状態表示・退避・巻き戻しは他の行と同じです。
 - **個人用の manifest**: 社内のプロジェクト名や、プロジェクト固有の指示は、公開リポジトリに置けません。`~/.config/ai-agent-config/local-manifest.tsv`(同じ書式。相対パスの `src` は、そのファイルのあるフォルダ基準)に書くと、リポジトリの manifest に続けて処理されます。テンプレートは、その隣のフォルダ(例: `~/.config/ai-agent-config/tpl/`)に置きます。これで、各 Mac のエージェントが、その Mac のプロジェクトに合わせて内容を育てられます(`seed` なので上書きされません)。
@@ -74,7 +74,7 @@ ai-agent-config/tests/install-test.sh              # install/diff/rollbackの一
 - **機械的な検査(常時)**: メールアドレス、Slack ID、UUID、`/Users/<名前>/` のパス、秘密・トークンを探します。`public-check.py`(全追跡ファイル)、`--diff A..B`(追加された行だけ)、`--pre-push`(git の pre-push の入力)。`setup-git-account.sh` が `.git/hooks/pre-push` に設置するので、**push 時に自動で走り**、見つかれば止まります(確認して問題なければ `git push --no-verify`)。hook はスクリプトの移動に備えて、場所を `git ls-files` で探し、見つからなければ通します。
 - **自分用の語**: 社内名・クライアント名・同僚の名前など、リポジトリに書けない語は、`~/.config/ai-agent-config/public-denylist.txt`(1行1正規表現、非公開)に書きます。既知の安全なヒット(テストの偽のキーなど)は、`ai-agent-config/public-check.allow`(`規則<TAB>パスのglob`)。
 - **提案(エージェント)**: `--suggest` は、ヒットを `agents.conf` の `ask`(道具なし・書き込みなしの質問用テンプレート)で、導入済みのエージェントに渡し、置き換え案を表で出させます。ファイルは編集しません。**ヒットの周辺の文が外部のモデルに渡る**ので、自分で指示したときだけ動きます。
-- **穴埋め(その Mac のエージェント)**: 公開用に一般化した知識ファイルには、`<自分のSlackユーザーID>` のようなプレースホルダが残ります。`--localize` が `~/.knowledge/*.md` の残りを一覧し、`--localize --agent` は、導入済みのエージェントを対話で起動して、この Mac で分かる値で埋めさせます(分からないものはあなたに質問する)。ローカルの知識ファイルなので、リポジトリには戻りません。
+- **穴埋め(その Mac のエージェント)**: 公開用に一般化した知識ファイルには、`<自分のSlackユーザーID>` のようなプレースホルダが残ります。`--localise` が `~/.knowledge/*.md` の残りを一覧し、`--localise --agent` は、導入済みのエージェントを対話で起動して、この Mac で分かる値で埋めさせます(分からないものはあなたに質問する)。ローカルの知識ファイルなので、リポジトリには戻りません。
 
 ## hook(`src/hooks/`)
 
@@ -157,7 +157,7 @@ hookの機能差: Claude Code は全機能。Codex は、`apply_patch` と `Bash
 - **Codexのhookは、人が `/hooks` で信頼するまで動かない。** 信頼はhookの内容のハッシュに紐付く。ペイロードの `UserPromptSubmit` は実機で確認したが、`Bash` / `apply_patch` のツール名は公式文書に基づく(確認時、Codexが使用上限に達しており、モデル呼び出しを伴う実機テストができなかった)。
 - Museの `PreToolUse` の入力と拒否の挙動は未検証(未ログイン)。`UserPromptSubmit` はユーザー設定からの発火を実機で確認済み。
 - Grokは未導入のため、skillsのsymlinkとhookの共有は未検証。
-- Coworkセッションでは、ユーザースコープの `@AGENTS.md` のimportがworkspace外のパスとして無視される。
+- Claude の Cowork セッション(ユーザー向けの共同作業モード)では、ユーザースコープの `@AGENTS.md` のimportがworkspace外のパスとして無視される。
 - 使用上限の自動待機が `claude -p`(非対話)で効くかは、公式文書に記載が無い。probeは各CLIの残枠を取得できないため、使用上限を検知した司令塔が `~/.agent-state/unavailable/<agent>.txt` に記録する(期限まで `limit` と表示される)。
 - 実行中のセッションがsettings.jsonのhook変更をいつ取り込むかはツール次第。新しいセッションから確実に有効になる。
 
