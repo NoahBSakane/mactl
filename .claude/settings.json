@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git fetch)",
+      "Bash(git fetch *)",
+      "Bash(git pull)",
+      "Bash(git pull *)",
+      "Bash(git push)",
+      "Bash(git push *)"
+    ],
+    "ask": [
+      "Bash(git push -f *)",
+      "Bash(git push * -f*)",
+      "Bash(git push *--force*)",
+      "Bash(git push *--delete*)",
+      "Bash(git push *:refs/*)"
+    ]
+  }
+}
