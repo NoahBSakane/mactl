@@ -12,7 +12,7 @@ export HOME="$TMP_HOME" AGENT_STATE_DIR="$TMP_HOME/.agent-state" AGENTS_HOOKS_DI
 unset AGENT_DELEGATED_BY
 # Never call a real agent from a test: same tool/exec data as agents.conf, but no research/interactive templates
 SAFE_CONF="$TMP_HOME/agents.conf"
-sed -e 's/^research = .*/research =/' -e 's/^interactive = .*/interactive =/' -e 's/^ping = .*/ping =/' "$HOOKS/agents.conf" >"$SAFE_CONF"
+sed -e 's/^research = .*/research =/' -e 's/^interactive = .*/interactive =/' -e 's/^ping = .*/ping =/' -e 's/^ask = .*/ask =/' "$HOOKS/agents.conf" >"$SAFE_CONF"
 export AGENTS_CONF="$SAFE_CONF"
 
 pass=0; fail=0

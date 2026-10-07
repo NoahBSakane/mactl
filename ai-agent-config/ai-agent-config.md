@@ -1,6 +1,6 @@
 # AIコーディングエージェントの設定を他Macへ複製する
 
-このMac(nbsさんの環境)の個人設定。プロジェクトのコードとは無関係。
+個人のMacの設定。プロジェクトのコードとは無関係。
 
 ## 何を管理するか
 
@@ -57,6 +57,24 @@ ai-agent-config/tests/install-test.sh              # install/diff/rollbackの一
 - **日常の編集:** 配備された指示ファイル(`~/AGENTS.md` など)は、エージェントが直接編集できない(hookが拒否する)。ルールの追加・変更は、提案(`propose-rule`)→検討(`triage-rules`)→ リポジトリの `src/` を直して `install.sh`、の順に行う。あなた自身がliveを直接編集した場合は、`diff-ai-agent-config.sh` で差分を見て、`/reconcile-agent-config`([.claude/skills/reconcile-agent-config/](../.claude/skills/reconcile-agent-config/SKILL.md))で取り込む。
 - **他のMacへ:** `git clone`(または `git pull`)して `ai-agent-config/install.sh`。初回は既存のliveファイルが `DRIFT` になるので、`diff-ai-agent-config.sh` で内容を確認してから `install.sh -f`(退避先は `~/.agent-state/backups/`)。
 - 共通ルールを直すときは `src/shared-rules.md` だけを直す(`install.sh` が `~/AGENTS.md` へ反映し、他のエージェントはそのsymlink経由で同じファイルを読む)。
+
+## プロジェクトへの配置(`project` 行)と、個人用の manifest
+
+プロジェクトごとの指示(`AGENTS.md`)や `.claude/settings.json` のように、「各プロジェクトの中」に置きたいファイルは、`project` 行で配ります。
+
+- **行**: `id project src <セレクタ>::<プロジェクト内のパス> cond [flags]`。セレクタは `name=<フォルダ名のglob>`・`remote=<originのURLのglob>`・`all`(全プロジェクト)。
+- **配る先(プロジェクト)**: プロジェクトルート直下の git リポジトリです。ルートは、環境変数 `AI_CONFIG_PROJECT_ROOTS`(`:` 区切り)、無ければ `~/.config/ai-agent-config/project-roots`(1行1パス)、それも無ければ `~/Repo`・`~/repos`・`~/src`・`~/code`・`~/dev`・`~/projects` と、その1階層下(例: `~/<組織>/Repo`)です。
+- **動作**: 既定は `seed`(無いときだけ置く。プロジェクト側の編集は上書きしない)。`managed` を付けると `copy` と同じで、テンプレートと同一に保ち、編集されたものはドリフトとして報告します(`-f` で戻す)。行は、プロジェクトごとに `id@フォルダ名` の1行として展開されるので、状態表示・退避・巻き戻しは他の行と同じです。
+- **個人用の manifest**: 社内のプロジェクト名や、プロジェクト固有の指示は、公開リポジトリに置けません。`~/.config/ai-agent-config/local-manifest.tsv`(同じ書式。相対パスの `src` は、そのファイルのあるフォルダ基準)に書くと、リポジトリの manifest に続けて処理されます。テンプレートは、その隣のフォルダ(例: `~/.config/ai-agent-config/tpl/`)に置きます。これで、各 Mac のエージェントが、その Mac のプロジェクトに合わせて内容を育てられます(`seed` なので上書きされません)。
+
+## 公開リポジトリに載せてよいかの検査(`public-check.py`)
+
+このリポジトリは公開です。社内・個人の固有名、ID、人名、秘密が入らないよう、機械で検査し、直し方の提案とローカルでの穴埋めだけ、使っているエージェントに任せます。
+
+- **機械的な検査(常時)**: メールアドレス、Slack ID、UUID、`/Users/<名前>/` のパス、秘密・トークンを探します。`public-check.py`(全追跡ファイル)、`--diff A..B`(追加された行だけ)、`--pre-push`(git の pre-push の入力)。`setup-git-account.sh` が `.git/hooks/pre-push` に設置するので、**push 時に自動で走り**、見つかれば止まります(確認して問題なければ `git push --no-verify`)。hook はスクリプトの移動に備えて、場所を `git ls-files` で探し、見つからなければ通します。
+- **自分用の語**: 社内名・クライアント名・同僚の名前など、リポジトリに書けない語は、`~/.config/ai-agent-config/public-denylist.txt`(1行1正規表現、非公開)に書きます。既知の安全なヒット(テストの偽のキーなど)は、`ai-agent-config/public-check.allow`(`規則<TAB>パスのglob`)。
+- **提案(エージェント)**: `--suggest` は、ヒットを `agents.conf` の `ask`(道具なし・書き込みなしの質問用テンプレート)で、導入済みのエージェントに渡し、置き換え案を表で出させます。ファイルは編集しません。**ヒットの周辺の文が外部のモデルに渡る**ので、自分で指示したときだけ動きます。
+- **穴埋め(その Mac のエージェント)**: 公開用に一般化した知識ファイルには、`<自分のSlackユーザーID>` のようなプレースホルダが残ります。`--localize` が `~/.knowledge/*.md` の残りを一覧し、`--localize --agent` は、導入済みのエージェントを対話で起動して、この Mac で分かる値で埋めさせます(分からないものはあなたに質問する)。ローカルの知識ファイルなので、リポジトリには戻りません。
 
 ## hook(`src/hooks/`)
 

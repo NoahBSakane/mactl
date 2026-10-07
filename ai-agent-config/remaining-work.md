@@ -34,7 +34,7 @@ Codex の使用上限は、予定(2026-10-10 11:42)より早く解除された�
 - [ ] **Muse の `muse-adapter.sh`(無人実行を委譲先とみなす判定)の実機検証。** `permission_mode` が `bypassPermissions` になることは確認済みだが、ゲートがツール呼び出しで実際に素通しになるかは、モデル呼び出しが必要で未検証。
 - [ ] **Codex の `Bash` ゲートでの `AGENT_DELEGATED_BY` の素通し。** hookプロセスに環境変数が渡ることは `UserPromptSubmit` で確認済み。`Bash` ゲート自体の実機確認が残っている(上の検証待ちを参照)。
 - [ ] **Grok Build の配線。** 未導入のため、skills の symlink と、Claude の設定の hook を読む挙動を検証していない。
-- [ ] **使用上限の自動再開(`autoContinueAtUsageLimit`)が、この Mac(claude.ai の Team 契約)で効くか。** 設定の既定は有効だが、`/config` に行が出ない(2026-10-07、ユーザーが確認)。実際に上限に当たったとき、リセット後に再開するかを見る。`claude -p`(非対話)での自動待機は、公式文書に記載が無い。
+- [ ] **使用上限の自動再開(`autoContinueAtUsageLimit`)が効くか(`/config` に行が出ない環境で)。** 設定の既定は有効だが、環境によっては `/config` に行が出ない(2026-10-07に確認)。実際に上限に当たったとき、リセット後に再開するかを見る。`claude -p`(非対話)での自動待機は、公式文書に記載が無い。
 - [ ] **実行中のセッションが、settings.json の hook 変更をいつ取り込むか。** ツール次第で、新しいセッションからは確実に有効になる。
 - [ ] **agy の `/ofuro` 以外の `PreToolUse` 経路。** 編集ツールのうち、`replace_file_content` と `multi_replace_file_content` の入力は未確認(`write_to_file` は確認済み)。
 

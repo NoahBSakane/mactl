@@ -20,7 +20,7 @@
 - 指示: `~/.claude/CLAUDE.md`。AGENTS.mdは、CLAUDE.mdが無い時だけ読む(v2.1.277〜)ので `@AGENTS.md` で取り込む。import最大4段、相対パスはimport元基準。
 - skills: `~/.claude/skills/<name>/SKILL.md`(symlink可)。`~/.agents/skills` は読まない。
 - hook: settings.json。入力に `agent_id`(サブエージェント内のみ)、`permission_mode`。`if: "Bash(codex exec *)"` で絞り込み可。
-- 自走: `/goal`(auto mode併用で無人)。上限: 設定 `autoContinueAtUsageLimit`(v2.1.234〜、既定で有効)で、リセット後に自動再開(claude.ai契約の対話。`/config` の「Continue automatically at usage limit」の行は、環境によって表示されない。claude.ai の Team 契約のこのMacでは表示されない=確認 2026-10-07。`-p` は記載なし)。
+- 自走: `/goal`(auto mode併用で無人)。上限: 設定 `autoContinueAtUsageLimit`(v2.1.234〜、既定で有効)で、リセット後に自動再開(claude.ai契約の対話。`/config` の「Continue automatically at usage limit」の行は、環境によって表示されない。表示されない環境がある=確認 2026-10-07。`-p` は記載なし)。
 - メモリ: `~/.claude/projects/<プロジェクト>/memory/*.md`(自動メモリ。`MEMORY.md` は索引)。**確認済み 2026-10-07**
 - 許可ルール(**実機確認 2026-10-07**): ヘッドレス(`-p`)は対話の承認ができず、許可の無いツールは自動で拒否される(「no output produced — a tool required the "read_url" permission …」)。設定は `~/.gemini/antigravity-cli/settings.json` の `permissions.allow`(ヘッドレスもこれを読む。プロジェクト単位は `~/.gemini/config/projects/` が優先)。書式は `command(<バイナリ サブコマンド>)`・`read_file(<絶対パス>)`・`write_file(<絶対パス>)`・`mcp(<server>/<tool>)`・`read_url(<ドメイン>)`・`execute_url(<ドメイン>)`(CLI同梱の説明は `*` の全許可を禁じている)。**Web検索 `search_web` は許可ルール不要**(ルール無しで無人実行できた)。**ページ取得 `read_url` はドメインごとのルールが要る**(ルール無しは拒否、`read_url(example.com)` と公式ドキュメントのドメインは取得できた)。
 - 読み取り専用のWeb調査(ヘッドレス): `agents.conf` の `research` に置いてある。許可ルールの `read_url` はドメイン単位でワイルドカードが無く(`*`・`*.com`・無指定は通らない)、hookが `allow` を返しても、`permissionOverrides` を付けても、無人では拒否される(いずれも実機確認 2026-10-07)。そこで `--dangerously-skip-permissions` で動かし、調査ジョブの間だけ有効な PreToolUse hook `agy-job-guard.sh`(拒否 `deny` はこのフラグでも効く)が、Web検索とページ取得以外の全ツール(シェル・ファイル・ブラウザ・MCP)を拒否し、内部アドレス・認証情報つき・秘密らしき文字列を含むURLも拒否する。ガードは失敗時に拒否側へ倒れる(他のhookは通す側)。実機で、取得は通り、`run_command` と `view_file` は拒否された。`~/.gemini/antigravity-cli/settings.json` の許可ルール(`agy-settings-allow`)は、対話のagyでの便宜。
@@ -52,7 +52,7 @@
 - hook: `~/.gemini/config/hooks.json`(名前付きの集合 `{名前:{イベント:[…]}}`。プロジェクトは `.agents/hooks.json`。**実機確認 2026-10-06**)。入力はcamelCase(`conversationId`・`workspacePaths`・`toolCall.name`/`args`)。シェルは `run_command`(`CommandLine`)、編集は `write_to_file`(`TargetFile`)。`PreToolUse` の出力は `{"decision":"allow|deny|ask","reason":…}`(denyは「tool call denied by pre-tool hook」として返る。`--dangerously-skip-permissions` の実行では `ask` は自動承認される)。`PostToolUse` は空の `{}` だけを返せる(他のキーは読み込みエラー)。モデルへ何かを伝えるのは `PreInvocation`(モデル呼び出しの前。`{"injectSteps":[{"ephemeralMessage":"…"}]}` で注入。`invocationNum` は、ユーザーのターンの最初の呼び出しで0、ツール結果を受けて呼び直すたびに増える。**実機確認 2026-10-07**)と `PostInvocation`(`terminationBehavior: force_continue` も可)。
 - メモリ: 永続メモリは持たない(会話の記録 `~/.gemini/antigravity-cli/brain/`・`conversations/` のみ。`knowledge/` は空)。第三者の記録を参照。**確認 2026-10-07**
 - 読み取り専用のWeb調査(ヘッドレス): 実用的な設定が無い。Webツール(`read_url` 等)ごとに許可ルールが要り、代替の `--dangerously-skip-permissions` はWebの内容を読む無人ジョブには使えない。そのため `agents.conf` に `research` を置いていない。
-- 適切用途: 大規模コンテキスト読解・マルチモーダル・調査(格付けB)。コーディング指数: Gemini 3.8 Flash (high) 41.9、Gemini 4 Argon (high) 63.8(格付けA、後者はこのMacの `agy models` に出ない場合がある)。
+- 適切用途: 大規模コンテキスト読解・マルチモーダル・調査(格付けB)。コーディング指数: Gemini 3.8 Flash (high) 41.9、Gemini 4 Argon (high) 63.8(格付けA、後者は環境によっては `agy models` に出ない)。
 
 ## Muse Code(`muse`)
 
@@ -93,7 +93,7 @@ Claude Codeが使えないときに、司令塔を代行させる順序。probe�
 根拠(Artificial Analysis Coding Agent Index、BenchLMの転載、2026-10-05時点。格付けA)と、導入・配線の状況:
 
 - Codex: GPT-6.1 Sol (xhigh) 62.9、(medium) 61.4。外部CLIで最上位。
-- agy: このMacで選べるモデルでは Gemini 3.8 Flash (high) 41.9。指数はMuseより低いが、導入・認証済みで、共通rules・共有skills・hook(ゲート)の配線を実機確認済み。Gemini 4 Argon (high) 63.8 は、このMacの `agy models` には出ない。
+- agy: 確認時点で選べたモデルでは Gemini 3.8 Flash (high) 41.9。指数はMuseより低いが、導入・認証済みで、共通rules・共有skills・hook(ゲート)の配線を実機確認済み。Gemini 4 Argon (high) 63.8 は、確認時点の `agy models` には出なかった。
 - Muse: Spark 1.3 (max) 54.3。指数はagyより高いが、認証が未完で、ゲートの実機検証も未了のため3番目にしている。
 - Grok: Grok 4.7 (xhigh) 56.3(未導入)。
 

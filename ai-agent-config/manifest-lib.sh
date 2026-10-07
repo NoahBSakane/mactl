@@ -11,6 +11,9 @@
 
 CFG_DIR="${CFG_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 MANIFEST="${MANIFEST:-$CFG_DIR/manifest.tsv}"
+# Private rows that must not live in this (public) repo - a project's own AGENTS.md, company names - go
+# in a manifest of your own. Same format; a relative src is relative to that file's folder.
+LOCAL_MANIFEST="${LOCAL_MANIFEST:-$HOME/.config/ai-agent-config/local-manifest.tsv}"
 STATE_DIR="${AGENT_STATE_DIR:-$HOME/.agent-state}"
 RECORD="$STATE_DIR/installed.tsv"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/ai-agent-config.XXXXXX")"
@@ -84,7 +87,7 @@ unmerge_json() { # mode file [id] -> the file's JSON with our entries removed (m
     merge-agy-skills) jq --arg p "$AGY_SKILLS_PATH" '.entries = ((.entries // []) | map(select(.path != $p and .path != "~/.agents/skills")))' "$2" ;;
     merge-muse-context) jq "$MUSE_CTX_UNJQ" "$2" ;;
     merge-codex-persona) python3 "$CFG_DIR/toml-block.py" remove "$2" ;;
-    merge-union) jq --slurpfile frag "$(expand "$(awk -F'\t' -v id="$3" '$1==id{print $3}' "$MANIFEST")")" "$UNION_UNJQ" "$2" ;;
+    merge-union) jq --slurpfile frag "$(expand "$(cat "$MANIFEST" "$LOCAL_MANIFEST" 2>/dev/null | awk -F'\t' -v id="$3" '$1==id{print $3}')")" "$UNION_UNJQ" "$2" ;;
     merge-enforce) cat "$2" ;;   # enforced values are not taken back on rollback (the old values are in the backup file)
   esac
 }
@@ -158,10 +161,59 @@ row_status() {
   fi
 }
 
+# --- project rows: put a file into every project that matches ------------------------------------
+# Row: id <TAB> project <TAB> src <TAB> <selector>::<path inside the project> <TAB> cond <TAB> flags
+#   selector: name=<glob of the folder name> | remote=<glob of the origin URL> | all
+#   The file is placed when absent (like `seed`); flag `managed` keeps it identical to src (like `copy`).
+# A project is a git repository directly inside a project root. Roots: $AI_CONFIG_PROJECT_ROOTS (colon
+# separated), else the lines of ~/.config/ai-agent-config/project-roots, else the usual places
+# (~/Repo ~/repos ~/src ~/code ~/dev ~/projects and the same one level down, e.g. ~/<org>/Repo).
+project_roots() {
+  local f="$HOME/.config/ai-agent-config/project-roots" r
+  if [ -n "${AI_CONFIG_PROJECT_ROOTS:-}" ]; then tr ':' '\n' <<<"$AI_CONFIG_PROJECT_ROOTS"
+  elif [ -f "$f" ]; then sed -e '/^[[:space:]]*#/d' -e '/^[[:space:]]*$/d' "$f"
+  else for r in Repo repos src code dev projects; do printf '%s\n' "$HOME/$r"; done; for r in "$HOME"/*/Repo "$HOME"/*/repos "$HOME"/*/src; do printf '%s\n' "$r"; done
+  fi | while IFS= read -r r; do r="${r/#\~/$HOME}"; [ -d "$r" ] && printf '%s\n' "$r"; done
+}
+project_dirs() { # git repositories directly inside a root, sorted
+  local r d
+  project_roots | while IFS= read -r r; do
+    for d in "$r"/*/; do d="${d%/}"; [ -e "$d/.git" ] && printf '%s\n' "$d"; done
+  done | sort -u
+}
+project_match() { # selector dir -> 0 when the project matches
+  local sel="$1" d="$2" name url
+  name="$(basename "$d")"
+  case "$sel" in
+    all) return 0 ;;
+    name=*) [[ "$name" == ${sel#name=} ]] ;;
+    remote=*) url="$(git -C "$d" config --get remote.origin.url 2>/dev/null)"; [[ "$url" == ${sel#remote=} ]] ;;
+    *) return 1 ;;
+  esac
+}
+
 each_row() { # calls: "$1" id mode src dest(expanded) cond flags
-  local cb="$1" id mode src dest cond flags
-  while IFS=$'\t' read -r id mode src dest cond flags; do
-    case "$id" in ''|\#*) continue ;; esac
-    "$cb" "$id" "$mode" "$src" "$(expand "$dest")" "$cond" "${flags:-}"
-  done <"$MANIFEST"
+  # (locals are prefixed: bash scoping is dynamic, so a plain `n` here would hide the callbacks' own `n`)
+  local _er_cb="$1" _er_file _er_base _er_id _er_mode _er_src _er_dest _er_cond _er_flags _er_sel _er_rel _er_d _er_name _er_n _er_seen
+  for _er_file in "$MANIFEST" "$LOCAL_MANIFEST"; do
+    [ -f "$_er_file" ] || continue
+    _er_base="$(cd "$(dirname "$_er_file")" && pwd)"
+    while IFS=$'\t' read -r _er_id _er_mode _er_src _er_dest _er_cond _er_flags; do
+      case "$_er_id" in ''|\#*) continue ;; esac
+      if [ "$_er_file" != "$MANIFEST" ]; then case "$_er_src" in /*|\~*|-) ;; *) _er_src="$_er_base/$_er_src" ;; esac; fi
+      if [ "$_er_mode" = project ]; then
+        _er_sel="${_er_dest%%::*}"; _er_rel="${_er_dest#*::}"; _er_seen=" "
+        while IFS= read -r _er_d; do
+          [ -n "$_er_d" ] && project_match "$_er_sel" "$_er_d" || continue
+          _er_name="$(basename "$_er_d")"; _er_n=2
+          while [[ "$_er_seen" == *" $_er_name "* ]]; do _er_name="$(basename "$_er_d")-$_er_n"; _er_n=$((_er_n+1)); done
+          _er_seen="$_er_seen$_er_name "
+          if [[ ",${_er_flags:-}," == *,managed,* ]]; then "$_er_cb" "$_er_id@$_er_name" copy "$_er_src" "$_er_d/$_er_rel" "$_er_cond" "${_er_flags:-}"
+          else "$_er_cb" "$_er_id@$_er_name" seed "$_er_src" "$_er_d/$_er_rel" "$_er_cond" "${_er_flags:-}"; fi
+        done < <(project_dirs)
+        continue
+      fi
+      "$_er_cb" "$_er_id" "$_er_mode" "$_er_src" "$(expand "$_er_dest")" "$_er_cond" "${_er_flags:-}"
+    done <"$_er_file"
+  done
 }

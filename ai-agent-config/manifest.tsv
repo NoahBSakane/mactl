@@ -1,6 +1,6 @@
 # ai-agent-config manifest: one deployed artifact per line (tab separated).
 #   id            unique name (also the backup/state key)
-#   mode          copy | seed | link | copydir | merge-hooks | merge-agy-hooks | merge-agy-skills | merge-muse-context | merge-enforce | merge-union | merge-codex-persona | shims
+#   mode          copy | seed | link | copydir | merge-hooks | merge-agy-hooks | merge-agy-skills | merge-muse-context | merge-enforce | merge-union | project | merge-codex-persona | shims
 #   src           copy/seed/copydir: path relative to ai-agent-config/
 #                 link: the *target* the symlink points to | merge-*: JSON fragment | shims: -
 #   dest          where it lives on this Mac (~ allowed)
@@ -26,6 +26,13 @@
 #   merge-enforce        the fragment's JSON keys are forced to the repo's values on every install
 #                        (a value changed by hand is reset); keys the fragment does not mention
 #                        are left alone
+#   project  put a file into every project that matches. dest is `<selector>::<path in the project>`;
+#            selector: name=<glob of the folder name> | remote=<glob of origin's URL> | all.
+#            Placed when absent (like seed); flag `managed` keeps it identical to src (like copy).
+#            Projects are git repositories directly inside a project root (AI_CONFIG_PROJECT_ROOTS, or
+#            ~/.config/ai-agent-config/project-roots, or ~/Repo ~/repos ~/src ~/code ~/dev ~/projects and
+#            the same one level down). Rows for your own projects belong in ~/.config/ai-agent-config/
+#            local-manifest.tsv (same format), not in this public file.
 #   shims    one-version compatibility shims at the old ~/.claude/hooks/delegation/ paths
 #
 # Nothing not listed here is managed.

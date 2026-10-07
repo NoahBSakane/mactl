@@ -1,0 +1,7 @@
+# 偽の値(検査の動作確認用)
+secret	ai-agent-config/tests/hooks-test.sh
+email	ai-agent-config/tests/public-check-test.sh
+slack-id	ai-agent-config/tests/public-check-test.sh
+uuid	ai-agent-config/tests/public-check-test.sh
+home-path	ai-agent-config/tests/public-check-test.sh
+secret	ai-agent-config/tests/public-check-test.sh

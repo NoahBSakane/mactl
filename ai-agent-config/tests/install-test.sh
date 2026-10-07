@@ -9,6 +9,13 @@ unset AGENT_STATE_DIR
 FAKEBIN="$HOME/fakebin"; mkdir -p "$FAKEBIN"
 for c in codex agy muse grok; do printf '#!/bin/sh\nexit 0\n' >"$FAKEBIN/$c"; chmod +x "$FAKEBIN/$c"; done
 export PATH="$FAKEBIN:$PATH"
+# project rows: a private local manifest places files into projects found under ~/Repo
+for pr in proj-a proj-b; do mkdir -p "$HOME/Repo/$pr" && git -C "$HOME/Repo/$pr" init -q . ; done
+git -C "$HOME/Repo/proj-b" remote add origin https://example.org/team/proj-b.git
+mkdir -p "$HOME/Repo/not-git" "$HOME/.config/ai-agent-config/tpl"
+printf 'project rules\n' >"$HOME/.config/ai-agent-config/tpl/AGENTS.md"; printf '{"x":1}\n' >"$HOME/.config/ai-agent-config/tpl/settings.json"
+printf 'remote only\n' >"$HOME/.config/ai-agent-config/tpl/remote.md"
+printf 'lp-name\tproject\ttpl/AGENTS.md\tname=proj-a::AGENTS.md\talways\nlp-all\tproject\ttpl/settings.json\tall::.claude/settings.json\talways\tmanaged\nlp-remote\tproject\ttpl/remote.md\tremote=*example.org/team/*::docs/R.md\talways\n' >"$HOME/.config/ai-agent-config/local-manifest.tsv"
 trap 'rm -rf "$HOME"' EXIT
 pass=0; fail=0
 ok()  { pass=$((pass+1)); }
@@ -143,6 +150,15 @@ grep -q "my local edit" "$HOME/AGENTS.md" && ok || bad "live edit survived"
 echo "live registry edit" >>"$HOME/.knowledge/ai-agents.md"
 bash "$CFG/install.sh" -f -y >/dev/null 2>&1
 grep -q "live registry edit" "$HOME/.knowledge/ai-agents.md" && ok || bad "seed row keeps live content"
+[ "$(cat "$HOME/Repo/proj-a/AGENTS.md" 2>/dev/null)" = "project rules" ] && [ ! -e "$HOME/Repo/proj-b/AGENTS.md" ] && ok || bad "project row: name= selector places the file only in the matching project"
+[ -f "$HOME/Repo/proj-a/.claude/settings.json" ] && [ -f "$HOME/Repo/proj-b/.claude/settings.json" ] && [ ! -e "$HOME/Repo/not-git/.claude/settings.json" ] && ok || bad "project row: all selector reaches every git project and nothing else"
+[ -f "$HOME/Repo/proj-b/docs/R.md" ] && [ ! -e "$HOME/Repo/proj-a/docs/R.md" ] && ok || bad "project row: remote= selector matches on the origin URL"
+echo "my own edit" >"$HOME/Repo/proj-a/AGENTS.md"; echo '{"x":2}' >"$HOME/Repo/proj-a/.claude/settings.json"
+bash "$CFG/install.sh" -y >/dev/null 2>&1; code "project row (managed): an edited copy is reported as drift and not overwritten" 3 $?
+[ "$(cat "$HOME/Repo/proj-a/.claude/settings.json")" = '{"x":2}' ] && ok || bad "project row (managed): drift leaves the edit alone"
+bash "$CFG/install.sh" -f -y >/dev/null 2>&1
+[ "$(cat "$HOME/Repo/proj-a/AGENTS.md")" = "my own edit" ] && ok || bad "project row (seed): a project's own edit is never overwritten, even with -f"
+[ "$(cat "$HOME/Repo/proj-a/.claude/settings.json")" = '{"x":1}' ] && ok || bad "project row (managed): -f restores the template"
 
 # 8. rollback of the first install brings the old machine back
 first="$(ls -1 "$HOME/.agent-state/backups" | head -1)"
@@ -154,6 +170,7 @@ jq -e '.autoMode.environment == ["Source control: my own org"]' "$HOME/.claude/s
 jq -e '.description=="mine" and ([.. | .command? // empty | select(test("agents/hooks"))] | length == 0) and ([.. | .command? // empty | select(. == "/opt/my-codex-stop.sh")] | length == 1)' "$HOME/.codex/hooks.json" >/dev/null && ok || bad "rollback unmerges codex hooks, keeps the user's"
 jq -e '.tui.foreign_context_notice_shown==true and (has("hooks")|not) and (has("context")|not)' "$HOME/.config/muse/settings.json" >/dev/null && ok || bad "rollback unmerges muse hooks and context"
 [ ! -e "$HOME/.config/muse/AGENTS.md" ] && ok || bad "rollback removes muse AGENTS.md"
+[ ! -e "$HOME/Repo/proj-b/docs/R.md" ] && [ ! -e "$HOME/Repo/proj-a/.claude/settings.json" ] && ok || bad "rollback removes the files placed into projects"
 jq -e '.colorScheme=="dark" and .permissions.allow==["command(my own tool)"]' "$HOME/.gemini/antigravity-cli/settings.json" >/dev/null && ok || bad "rollback takes only our allow rules out"
 [ ! -e "$HOME/.gemini/config/hooks.json" ] || jq -e 'has("ai-agent-config")|not' "$HOME/.gemini/config/hooks.json" >/dev/null && ok || bad "rollback removes agy hook set"
 

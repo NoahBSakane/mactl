@@ -81,7 +81,7 @@ cd ~/Repo/mac-setup/ai-agent-config
 ### Claude Code
 
 - 配備すると、`~/.claude/settings.json` の `permissions.defaultMode`(自動モード `auto`)と `skillOverrides`(使わない同期skillの無効化)が、リポジトリの値で**上書きされる**。手で変えた値は、次の `install.sh` で戻る(`diff-ai-agent-config.sh` は `UPDATE` と報告する)。変えたい場合は `src/claude-settings-enforced.json` を直す。他のキーは触らない。
-- 使用上限の自動再開は、設定 `autoContinueAtUsageLimit`(既定で有効)です。`/config` に「Continue automatically at usage limit」の行が出る環境と出ない環境があります(claude.ai の Team 契約では出ないことを確認)。出ない環境では、設定を足さずに既定に任せ、待てないときは `orchestrate-agents` skill の `failover.md` に従います。
+- 使用上限の自動再開は、設定 `autoContinueAtUsageLimit`(既定で有効)です。`/config` に「Continue automatically at usage limit」の行が出る環境と出ない環境があります(出ない環境があることを確認済み)。出ない環境では、設定を足さずに既定に任せ、待てないときは `orchestrate-agents` skill の `failover.md` に従います。
 - 新しいセッションを開く。実行中のセッションは起動時の指示を保持しているため、新しい指示とhookは新しいセッションから確実に有効になります。
 - お風呂モード(`/ofuro`)で無人運転する前に、権限モードを auto にする(`Shift+Tab`)。
 

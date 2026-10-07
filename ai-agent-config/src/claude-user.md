@@ -33,5 +33,5 @@ hook(`reminder.sh` → `status-line.sh`)が、最初のプロンプトとその�
 
 ### 上限・自走
 
-- 使用上限に当たったら、使用上限の自動再開(設定 `autoContinueAtUsageLimit`、既定で有効)は、`/config` に行が出る環境と出ない環境がある(claude.ai の Team 契約のこのMacでは出ない。2026-10-07確認)。効くかは環境次第なので当てにしない。待たずに続ける場合は `orchestrate-agents` skill の `failover.md` に従う。
+- 使用上限に当たったら、使用上限の自動再開(設定 `autoContinueAtUsageLimit`、既定で有効)は、`/config` に行が出る環境と出ない環境がある(出ない環境があることを確認済み)。効くかは環境次第なので当てにしない。待たずに続ける場合は `orchestrate-agents` skill の `failover.md` に従う。
 - ユーザーが離席する場合は `/ofuro [時間] [任務]`。時間を指定しなければ2時間。

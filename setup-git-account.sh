@@ -1,7 +1,7 @@
 #!/bin/bash
 # setup-git-account.sh - make this clone pull/push as one GitHub account, whatever `gh` has active.
 #
-#   ./setup-git-account.sh [account]        (default: NoahBSakane)
+#   ./setup-git-account.sh [account]        (default: the owner named in origin's URL)
 #
 # Writes only this clone's .git/config (never ~/.gitconfig, never the gh active account):
 #   - origin gets the account name in its URL (https://<account>@github.com/...)
@@ -10,9 +10,13 @@
 #     active (e.g. the company account used by the other projects). No token is stored anywhere.
 # Safe to run again. The account must already be logged in: gh auth login -h github.com -p https -w
 set -uo pipefail
-account="${1:-NoahBSakane}"
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 g() { git -C "$repo" "$@"; }
+account="${1:-}"
+if [ -z "$account" ]; then
+  account="$(g remote get-url origin 2>/dev/null | sed -nE 's#^https://([^@/]+@)?github\.com/([^/]+)/.*#\2#p')"
+  [ -n "$account" ] || { echo "origin のURLからアカウントを決められません。引数で渡してください" >&2; exit 1; }
+fi
 command -v gh >/dev/null 2>&1 || { echo "gh が見つかりません" >&2; exit 1; }
 if ! gh auth token -u "$account" >/dev/null 2>&1; then
   echo "gh に $account でログインしていません。端末(Claude Code の外)で次を実行してから、もう一度:" >&2
@@ -31,3 +35,21 @@ g config --local "$key.username" "$account"
 echo "設定しました: $(g remote get-url origin)"
 got="$(printf 'protocol=https\nhost=github.com\nusername=%s\n\n' "$account" | g credential fill 2>/dev/null | sed -n 's/^password=//p')"
 if [ -n "$got" ] && [ "$got" = "$(gh auth token -u "$account")" ]; then echo "確認: git の認証は $account のトークンです"; else echo "警告: 認証の確認に失敗しました" >&2; exit 1; fi
+
+# pre-push check: keep company names, IDs and secrets out of this public repository (public-check.py).
+# Installed only when no other pre-push hook is there. Fail-open if the script has moved; `git push --no-verify` skips it.
+hook="$(g rev-parse --git-path hooks/pre-push)"; case "$hook" in /*) ;; *) hook="$repo/$hook" ;; esac
+if [ ! -e "$hook" ] || grep -q "public-check" "$hook" 2>/dev/null; then
+  mkdir -p "$(dirname "$hook")"
+  cat >"$hook" <<'HOOK'
+#!/bin/bash
+# installed by setup-git-account.sh: scan what is about to be pushed (ai-agent-config/public-check.py)
+top="$(git rev-parse --show-toplevel)" || exit 0
+f="$(git -C "$top" ls-files '*public-check.py' | head -1)"
+[ -n "$f" ] && [ -f "$top/$f" ] || exit 0
+exec python3 "$top/$f" --pre-push
+HOOK
+  chmod +x "$hook"; echo "pre-push の検査を設定しました: $hook"
+else
+  echo "既存の pre-push hook があるので、公開前の検査は設定しませんでした: $hook" >&2
+fi
