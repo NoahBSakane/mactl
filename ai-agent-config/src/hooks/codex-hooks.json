@@ -1,0 +1,28 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      { "hooks": [ { "type": "command", "command": "AGENT_SELF=codex $HOME/.agents/hooks/reminder.sh" } ] }
+    ],
+    "PreToolUse": [
+      { "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "$HOME/.agents/hooks/secret-scan.sh" },
+          { "type": "command", "command": "$HOME/.agents/hooks/gate.sh" }
+        ] },
+      { "matcher": "apply_patch|Edit|Write",
+        "hooks": [ { "type": "command", "command": "$HOME/.agents/hooks/gate.sh" } ] }
+    ],
+    "PostToolUse": [
+      { "matcher": "Bash",
+        "hooks": [ { "type": "command", "command": "$HOME/.agents/hooks/logger.sh" } ] },
+      { "matcher": "apply_patch|Edit|Write",
+        "hooks": [
+          { "type": "command", "command": "$HOME/.agents/hooks/md-lint.sh" },
+          { "type": "command", "command": "$HOME/.agents/hooks/handoff-exclude-hook.sh" }
+        ] }
+    ],
+    "Stop": [
+      { "hooks": [ { "type": "command", "command": "$HOME/.agents/hooks/ofuro-guard.sh" } ] }
+    ]
+  }
+}

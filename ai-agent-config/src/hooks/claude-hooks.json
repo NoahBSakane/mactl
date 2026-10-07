@@ -1,0 +1,36 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      { "hooks": [ { "type": "command", "command": "AGENT_SELF=claude $HOME/.agents/hooks/reminder.sh" } ] }
+    ],
+    "PreToolUse": [
+      { "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "$HOME/.agents/hooks/secret-scan.sh" },
+          { "type": "command", "command": "$HOME/.agents/hooks/gate.sh" }
+        ] },
+      { "matcher": "Write|Edit|MultiEdit|NotebookEdit",
+        "hooks": [ { "type": "command", "command": "$HOME/.agents/hooks/gate.sh" } ] },
+      { "matcher": "Agent|Task|Workflow",
+        "hooks": [ { "type": "command", "command": "$HOME/.agents/hooks/gate.sh" } ] },
+      { "matcher": "AskUserQuestion",
+        "hooks": [ { "type": "command", "command": "$HOME/.agents/hooks/ofuro-guard.sh" } ] }
+    ],
+    "PostToolUse": [
+      { "matcher": "Bash",
+        "hooks": [ { "type": "command", "command": "$HOME/.agents/hooks/logger.sh" } ] },
+      { "matcher": "Agent|Task|Workflow",
+        "hooks": [ { "type": "command", "command": "$HOME/.agents/hooks/logger.sh" } ] },
+      { "matcher": "AskUserQuestion",
+        "hooks": [ { "type": "command", "command": "$HOME/.agents/hooks/mark-asked.sh" } ] },
+      { "matcher": "Write|Edit|MultiEdit|NotebookEdit",
+        "hooks": [
+          { "type": "command", "command": "$HOME/.agents/hooks/md-lint.sh" },
+          { "type": "command", "command": "$HOME/.agents/hooks/handoff-exclude-hook.sh" }
+        ] }
+    ],
+    "Stop": [
+      { "hooks": [ { "type": "command", "command": "$HOME/.agents/hooks/ofuro-guard.sh" } ] }
+    ]
+  }
+}

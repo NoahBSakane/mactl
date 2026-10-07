@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "read_url(docs.claude.com)",
+      "read_url(code.claude.com)",
+      "read_url(docs.anthropic.com)",
+      "read_url(www.anthropic.com)",
+      "read_url(developers.openai.com)",
+      "read_url(platform.openai.com)",
+      "read_url(openai.com)",
+      "read_url(antigravity.google)",
+      "read_url(ai.google.dev)",
+      "read_url(developers.google.com)",
+      "read_url(cloud.google.com)",
+      "read_url(artificialanalysis.ai)",
+      "read_url(benchlm.ai)",
+      "read_url(github.com)",
+      "read_url(raw.githubusercontent.com)"
+    ]
+  }
+}

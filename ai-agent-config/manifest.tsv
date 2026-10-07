@@ -1,0 +1,72 @@
+# ai-agent-config manifest: one deployed artifact per line (tab separated).
+#   id            unique name (also the backup/state key)
+#   mode          copy | seed | link | copydir | merge-hooks | merge-agy-hooks | merge-agy-skills | merge-muse-context | merge-enforce | merge-union | merge-codex-persona | shims
+#   src           copy/seed/copydir: path relative to ai-agent-config/
+#                 link: the *target* the symlink points to | merge-*: JSON fragment | shims: -
+#   dest          where it lives on this Mac (~ allowed)
+#   cond          always | cmd:<binary>  (deployed only when that CLI is installed)
+#   flags         optional. `protect` = a deployed instruction file: agents may not edit it directly
+#                 (the gate refuses; install.sh writes the list to ~/.agent-state/protected-paths.txt)
+#
+# Modes:
+#   copy     live file is a working copy of src; install refuses to overwrite live edits
+#   seed     placed only when absent; afterwards live owns it (the registry is auto-refreshed)
+#   link     dest is a symlink to src
+#   copydir  directory mirrored from src
+#   merge-hooks          our hook entries are merged into a JSON file with a `hooks` object
+#                        (Claude settings.json, Codex hooks.json, Muse settings.json);
+#                        everything else in the file is left untouched
+#   merge-agy-hooks      our named hook set ("ai-agent-config") in agy's hooks.json
+#   merge-agy-skills     registers ~/.agents/skills in agy's skills.json
+#   merge-muse-context   turns off Muse's automatic import of other agents' personal rules/skills
+#   merge-codex-persona  Codex's persona goes into config.toml `developer_instructions` (a managed
+#                        block); the shared rules reach Codex through the AGENTS.md symlink
+#   merge-union          the fragment's values are added to what the file already has (arrays are
+#                        unioned, so entries the user added stay); rollback removes only ours
+#   merge-enforce        the fragment's JSON keys are forced to the repo's values on every install
+#                        (a value changed by hand is reset); keys the fragment does not mention
+#                        are left alone
+#   shims    one-version compatibility shims at the old ~/.claude/hooks/delegation/ paths
+#
+# Nothing not listed here is managed.
+#id	mode	src	dest	cond
+shared-rules	copy	src/shared-rules.md	~/AGENTS.md	always	protect
+claude-agents-link	link	~/AGENTS.md	~/.claude/AGENTS.md	always	protect
+gemini-agents-link	link	~/AGENTS.md	~/.gemini/AGENTS.md	cmd:agy	protect
+grok-agents-link	link	~/AGENTS.md	~/.grok/AGENTS.md	cmd:grok	protect
+claude-user	copy	src/claude-user.md	~/.claude/CLAUDE.md	always	protect
+codex-agents	link	~/AGENTS.md	~/.codex/AGENTS.md	cmd:codex	protect
+codex-persona	merge-codex-persona	src/codex-persona.md	~/.codex/config.toml	cmd:codex
+registry	seed	src/agents-registry.md	~/.knowledge/ai-agents.md	always
+probe	copy	src/bin/agents-probe.sh	~/.knowledge/bin/agents-probe.sh	always
+memory-harvest	copy	src/bin/memory-harvest.sh	~/.knowledge/bin/memory-harvest.sh	always
+working-practices	copy	src/knowledge/working-practices.md	~/.knowledge/working-practices.md	always
+rule-proposals	seed	src/rule-proposals.md	~/.knowledge/rule-proposals.md	always
+takeover	copy	agent-takeover.sh	~/.knowledge/bin/agent-takeover.sh	always
+ofuro-run	copy	ofuro-run.sh	~/.knowledge/bin/ofuro-run.sh	always
+hooks	copydir	src/hooks	~/.agents/hooks	always
+skill-orchestrate-agents	copydir	src/skills/orchestrate-agents	~/.agents/skills/orchestrate-agents	always
+skill-ofuro	copydir	src/skills/ofuro	~/.agents/skills/ofuro	always
+skill-refresh-registry	copydir	src/skills/refresh-registry	~/.agents/skills/refresh-registry	always
+skill-propose-rule	copydir	src/skills/propose-rule	~/.agents/skills/propose-rule	always
+skill-triage-rules	copydir	src/skills/triage-rules	~/.agents/skills/triage-rules	always
+claude-skill-orchestrate-agents	link	~/.agents/skills/orchestrate-agents	~/.claude/skills/orchestrate-agents	always
+claude-skill-ofuro	link	~/.agents/skills/ofuro	~/.claude/skills/ofuro	always
+claude-skill-refresh-registry	link	~/.agents/skills/refresh-registry	~/.claude/skills/refresh-registry	always
+claude-skill-propose-rule	link	~/.agents/skills/propose-rule	~/.claude/skills/propose-rule	always
+claude-skill-triage-rules	link	~/.agents/skills/triage-rules	~/.claude/skills/triage-rules	always
+claude-settings-hooks	merge-hooks	src/hooks/claude-hooks.json	~/.claude/settings.json	always
+claude-settings-enforced	merge-enforce	src/claude-settings-enforced.json	~/.claude/settings.json	always
+legacy-hook-shims	shims	-	~/.claude/hooks/delegation	always
+codex-hooks	merge-hooks	src/hooks/codex-hooks.json	~/.codex/hooks.json	cmd:codex
+muse-hooks	merge-hooks	src/hooks/muse-hooks.json	~/.config/muse/settings.json	cmd:muse
+muse-context	merge-muse-context	-	~/.config/muse/settings.json	cmd:muse
+muse-agents	link	~/AGENTS.md	~/.config/muse/AGENTS.md	cmd:muse	protect
+agy-hooks	merge-agy-hooks	src/hooks/agy-hooks.json	~/.gemini/config/hooks.json	cmd:agy
+agy-settings-allow	merge-union	src/agy-settings-allow.json	~/.gemini/antigravity-cli/settings.json	cmd:agy
+agy-skills	merge-agy-skills	-	~/.gemini/config/skills.json	cmd:agy
+grok-skill-orchestrate-agents	link	~/.agents/skills/orchestrate-agents	~/.grok/skills/orchestrate-agents	cmd:grok
+grok-skill-ofuro	link	~/.agents/skills/ofuro	~/.grok/skills/ofuro	cmd:grok
+grok-skill-refresh-registry	link	~/.agents/skills/refresh-registry	~/.grok/skills/refresh-registry	cmd:grok
+grok-skill-propose-rule	link	~/.agents/skills/propose-rule	~/.grok/skills/propose-rule	cmd:grok
+grok-skill-triage-rules	link	~/.agents/skills/triage-rules	~/.grok/skills/triage-rules	cmd:grok

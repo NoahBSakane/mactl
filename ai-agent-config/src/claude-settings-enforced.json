@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "defaultMode": "auto"
+  },
+  "skillOverrides": {
+    "built-in-browser": "off",
+    "chrome-browser": "off",
+    "computer-use": "off",
+    "deep-research": "off",
+    "docs": "off",
+    "docx": "off",
+    "google-workspace": "off",
+    "import-memory": "off",
+    "kickflow-api": "off",
+    "morning": "off",
+    "pdf": "off",
+    "pptx": "off",
+    "skill-creator": "off",
+    "xlsx": "off"
+  }
+}

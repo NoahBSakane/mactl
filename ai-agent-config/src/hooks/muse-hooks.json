@@ -1,0 +1,25 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      { "hooks": [ { "type": "command", "command": "AGENT_SELF=muse $HOME/.agents/hooks/reminder.sh" } ] }
+    ],
+    "PreToolUse": [
+      { "matcher": "*",
+        "hooks": [
+          { "type": "command", "command": "$HOME/.agents/hooks/secret-scan.sh" },
+          { "type": "command", "command": "$HOME/.agents/hooks/muse-adapter.sh gate.sh" }
+        ] }
+    ],
+    "PostToolUse": [
+      { "matcher": "*",
+        "hooks": [
+          { "type": "command", "command": "$HOME/.agents/hooks/logger.sh" },
+          { "type": "command", "command": "$HOME/.agents/hooks/md-lint.sh" },
+          { "type": "command", "command": "$HOME/.agents/hooks/handoff-exclude-hook.sh" }
+        ] }
+    ],
+    "Stop": [
+      { "hooks": [ { "type": "command", "command": "$HOME/.agents/hooks/ofuro-guard.sh" } ] }
+    ]
+  }
+}
