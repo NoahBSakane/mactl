@@ -88,6 +88,7 @@ ai-agent-config/tests/install-test.sh              # install/diff/rollbackの一
 | `registry-job.sh` | 台帳が14日を超えると、**自動で**調査を起動する。読み取り専用のWeb調査を、`agent-run.sh` が使えるエージェントで実行し、提案レポートを `~/.agent-state/proposals/` に作る。1日1回まで・同時に1本・ジョブ内からは起動しない・調査できるエージェントが無ければ起動しない |
 | `status-line.sh` | 他のエージェントの状況を1行にする(導入済みのものだけ。使用上限中は解除日時を秒まで)。`reminder.sh` が最初のプロンプトと3回に1回、「この行を応答の末尾に添える」指示として渡す(agy は `UserPromptSubmit` 相当が無いので、`agy-adapter.sh` が `PreInvocation` の `invocationNum` が0のとき(ターンの先頭)を数えて、同じ指示を注入する) |
 | `handoff-exclude.sh` / `handoff-exclude-hook.sh` | `.agent-handoff/`(引き継ぎ記録)をGitに入れないよう、`.git/info/exclude` へ自動で追記する(worktree・サブディレクトリ対応、重複しない)。編集ツールが書いた直後と、プロンプトごとに実行する |
+| `doctor.sh`(リポジトリ直下の `ai-agent-config/`) | 前提のツール(必須: jq・python3 3.8+・git・SHA-256・awk・sed・find、任意: gh・node)の点検と、足りないものの入れ方の案内。`install.sh` が最初に `--required` で呼び、足りなければ止める |
 | `fmt-epoch.sh` | 時刻の表示形式を1つにそろえる(`2026-10-10(Sat)11:42:34+09:00`。Asia/Tokyo固定・英語3文字の曜日・コロン付きオフセット)。使用上限の復帰時刻(probe・状態行・通知)と `/ofuro` の終了時刻に使う |
 | `limit-check.sh` | 使用上限が早く解除されていないかの定期確認。記録がある(使えないとされている)エージェントに、`agents.conf` の `ping`(最小の実呼び出し)を、30分に1回まで行う。通れば記録を外して通知し、新しい解除時刻が分かれば記録を動かす。`reminder.sh` がプロンプトごとにバックグラウンドで起動する |
 | `agy-job-guard.sh` | agy の調査ジョブ専用のPreToolUse hook(`AGENT_JOB` があるときだけ有効。失敗時は拒否側)。Web検索とページ取得以外の全ツールと、内部アドレス・認証情報つき・秘密らしき文字列を含むURLを拒否する。これにより、agy の調査を `--dangerously-skip-permissions` で動かしても読み取り専用になる |

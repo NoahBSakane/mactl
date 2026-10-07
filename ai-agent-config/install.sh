@@ -26,6 +26,7 @@
 # エントリだけをマージし、rollbackでも、そのエントリだけを外します。
 set -uo pipefail
 CFG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+bash "$CFG_DIR/doctor.sh" --required || exit 1   # 必須のツールが無ければ、何が足りないかを示して止める
 . "$CFG_DIR/manifest-lib.sh"
 
 YES=0; QUIET=0; DRY=0; SHOWDIFF=0; FORCE=0; FORCE_SEED=0; ONLY=""; ROLLBACK=""; ROLLBACK_REQ=0; LIST=0

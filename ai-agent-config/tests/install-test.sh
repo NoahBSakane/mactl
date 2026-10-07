@@ -160,6 +160,13 @@ bash "$CFG/install.sh" -f -y >/dev/null 2>&1
 [ "$(cat "$HOME/Repo/proj-a/AGENTS.md")" = "my own edit" ] && ok || bad "project row (seed): a project's own edit is never overwritten, even with -f"
 [ "$(cat "$HOME/Repo/proj-a/.claude/settings.json")" = '{"x":1}' ] && ok || bad "project row (managed): -f restores the template"
 
+# doctor.sh: the must-have tools are checked first, with a way to get each missing one
+bash "$CFG/doctor.sh" >/dev/null 2>&1; code "doctor passes when the tools are there" 0 $?
+nojq="$(mktemp -d)"; for t in bash python3 git awk sed find shasum; do ln -s "$(command -v $t)" "$nojq/$t"; done
+out="$(PATH="$nojq" /bin/bash "$CFG/install.sh" -n 2>&1)"; rc=$?
+[ "$rc" = 1 ] && grep -q "jq" <<<"$out" && grep -q "brew install jq" <<<"$out" && ok || bad "install.sh stops with the missing tool and how to get it (rc=$rc)"
+rm -rf "$nojq"
+
 # 8. rollback of the first install brings the old machine back
 first="$(ls -1 "$HOME/.agent-state/backups" | head -1)"
 bash "$CFG/install.sh" -r "$first" -y >/dev/null 2>&1
