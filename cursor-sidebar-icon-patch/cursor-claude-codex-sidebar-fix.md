@@ -25,7 +25,7 @@ Cursorの左端のアイコン列(Explorer・検索・ソース管理が並ぶ�
 
 ## 設置先とコード
 
-```
+```text
 mac-setup/cursor-sidebar-icon-patch/
   cursor-claude-codex-sidebar-fix.md                → このファイル
   cursor-sidebar-icon-patch.sh                      → 設置先: ~/Library/Scripts/cursor-sidebar-icon-patch.sh
@@ -49,7 +49,7 @@ mac-setup/cursor-sidebar-icon-patch/install-cursor-sidebar-icon-patch.sh
 
 ## 再発しないようにする自動化(launchd)
 
-```
+```text
 ~/Library/LaunchAgents/com.nbs.cursor-sidebar-icon-patch.plist   ← 定義(いつ実行するか)
 ~/Library/Scripts/cursor-sidebar-icon-patch.sh                    ← 実処理(パッチ本体、再実行しても安全)
 ~/Library/Logs/cursor-sidebar-icon-patch.log                      ← 実行ログ

@@ -10,7 +10,7 @@ macOSで「PCの再起動・ログインのたびに何かを自動実行した�
 
 ## 構成
 
-```
+```text
 ~/Library/Scripts/login-items.d/                          ← ★ここにスクリプトを置く
 ~/Library/Scripts/run-login-items.sh                       ← login-items.d/ の中身を順番に実行する共通ランナー
 ~/Library/LaunchAgents/com.nbs.login-items-runner.plist    ← ランナーをログイン時に起動するLaunchAgent定義
@@ -19,7 +19,7 @@ macOSで「PCの再起動・ログインのたびに何かを自動実行した�
 
 ## 設置先とコード
 
-```
+```text
 mac-setup/login-items/
   login-items-startup-scripts.md              → このファイル
   run-login-items.sh                          → 設置先: ~/Library/Scripts/run-login-items.sh
