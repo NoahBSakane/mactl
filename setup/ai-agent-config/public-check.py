@@ -12,7 +12,7 @@
 Mechanical rules (always on): e-mail addresses, Slack IDs, UUIDs, /Users/<name>/ paths, secrets/tokens.
 Your own private words (company, clients, colleagues) go in ~/.config/ai-agent-config/public-denylist.txt,
 one regular expression per line (`#` comments): the list is private, so it never lives in the repository.
-Known-safe hits: <repo>/ai-agent-config/public-check.allow, lines `rule<TAB>path-glob` (or `rule` alone).
+Known-safe hits: <repo>/setup/ai-agent-config/public-check.allow, lines `rule<TAB>path-glob` (or `rule` alone).
 `git push --no-verify` skips the hook when you decide a hit is fine.
 """
 import fnmatch

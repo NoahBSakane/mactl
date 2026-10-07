@@ -226,7 +226,7 @@ report:
 setup:
 	@printf '%s\n' '実行内容（この順で実行し、失敗したら停止）:' \
 	  '  1. $(REPO_ROOT)/setup/mise-uv-config/install-mise-uv-config.sh' \
-	  '  2. $(REPO_ROOT)/setup/ai-agent-config/install.sh' \
+	  '  2. $(REPO_ROOT)/setup/ai-agent-config/install.sh -Y（確認なし・配備の計画は表示）' \
 	  '  3. $(REPO_ROOT)/setup/login-items/install-login-items-runner.sh' \
 	  '  4. $(REPO_ROOT)/setup/cursor-sidebar-icon-patch/install-cursor-sidebar-icon-patch.sh'
 	@if [[ "$(YES)" != '1' ]]; then
@@ -235,7 +235,7 @@ setup:
 	  [[ "$$reply" == [yY] ]] || { printf '%s\n' '中止しました。'; exit 0; }
 	fi
 	@/bin/bash "$(REPO_ROOT)/setup/mise-uv-config/install-mise-uv-config.sh"
-	@/bin/bash "$(REPO_ROOT)/setup/ai-agent-config/install.sh" -y
+	@/bin/bash "$(REPO_ROOT)/setup/ai-agent-config/install.sh" -Y
 	@/bin/bash "$(REPO_ROOT)/setup/login-items/install-login-items-runner.sh"
 	@/bin/bash "$(REPO_ROOT)/setup/cursor-sidebar-icon-patch/install-cursor-sidebar-icon-patch.sh"
 

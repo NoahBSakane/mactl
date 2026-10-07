@@ -50,6 +50,9 @@ setup/ai-agent-config/install.sh -l                      # 退避(配備履歴)�
 setup/ai-agent-config/install.sh -r [時刻]               # 元に戻す(確認あり。時刻を省くと最新)。-R は戻すと変わる差分も表示
 setup/ai-agent-config/tests/hooks-test.sh                # hookの固定入力テスト
 setup/ai-agent-config/tests/install-test.sh              # install/diff/rollbackの一時HOMEテスト
+setup/ai-agent-config/tests/public-check-test.sh         # 公開前の検査のテスト
+setup/ai-agent-config/tests/handoff-exclude-test.sh      # .agent-handoff/ の除外のテスト
+(まとめて実行: mactl check。公開前の検査 public-check.py も走る)
 ```
 
 **オプションの規則: 小文字は簡潔(出力は少なめ・対象は狭い)、大文字は詳細・徹底(出力は多め・対象は広い)。** `-n`/`-N`(計画のみ・差分つき)、`-y`/`-Y`(要約だけ・計画も表示)、`-f`/`-F`(DRIFTの上書き・台帳の種への巻き戻しも)、`-r`/`-R`(戻す・差分つき)。長いオプション(`--yes`、`--dry-run`、`--force`、`--rollback` など)も使える。短いオプションは束ねられる(`-fy`)。端末でない実行で `-y`/`-Y` が無いと、計画を表示するだけで実行しない。

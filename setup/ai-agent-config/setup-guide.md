@@ -66,6 +66,8 @@ cd ~/Repo/mactl/setup/ai-agent-config
 ./diff-ai-agent-config.sh -b
 ./tests/hooks-test.sh
 ./tests/install-test.sh
+./tests/public-check-test.sh
+./tests/handoff-exclude-test.sh
 ```
 
 期待する結果は次のとおりです。

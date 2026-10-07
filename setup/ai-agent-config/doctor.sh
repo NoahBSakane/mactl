@@ -4,7 +4,7 @@
 #   ./doctor.sh              list everything, with how to install what is missing
 #   ./doctor.sh --required   only the must-haves, quietly (install.sh runs this first); exit 1 if one is missing
 #
-# Must-have: bash, jq, python3 (3.8+), git, a SHA-256 tool, awk, sed, find.
+# Must-have: bash, jq, python3 (3.8+), git, a SHA-256 tool, awk, sed, find, rsync.
 # Optional: gh (pushing this repository), node/npx (markdownlint on edit), curl, and the agent CLIs
 # (their state is agents-probe.sh's job). Without python3 the hooks silently stop checking (they fail open),
 # so it is a must-have even though nothing says so at run time. Exit 0 = all must-haves present.
@@ -36,14 +36,15 @@ if command -v python3 >/dev/null 2>&1 && ! python3 -c 'import sys; sys.exit(0 if
 fi
 row need git "リポジトリの操作"
 if command -v shasum >/dev/null 2>&1 || command -v sha256sum >/dev/null 2>&1; then [ "$REQ_ONLY" -eq 1 ] || printf '[  OK   ] %-8s %s\n' sha256 "ハッシュ(drift の検出)"; else miss=$((miss+1)); printf '[MISSING] %-8s %s → %s\n' shasum "ハッシュ" "$(hint shasum)"; fi
-for t in awk sed find dirname basename mktemp; do row need "$t" "標準コマンド"; done
+for t in awk sed find dirname basename mktemp rsync; do row need "$t" "標準コマンド"; done
 row want gh "このリポジトリへ push するとき(NoahBSakane でログイン)"
 row want node "markdownlint(編集直後の検査)"
 row want npx "markdownlint(編集直後の検査)"
 row want curl "台帳の調査など"
+if [ -x /opt/homebrew/opt/make/libexec/gnubin/make ] || command -v gmake >/dev/null 2>&1; then [ "$REQ_ONLY" -eq 1 ] || printf '[  OK   ] %-8s %s\n' make "GNU Make(mactl の入口)"; elif [ "$REQ_ONLY" -eq 0 ]; then printf '[ WARN  ] %-8s %s → %s\n' make "GNU Make(mactl の入口。mactl が探す場所: /opt/homebrew/opt/make/libexec/gnubin/make、無ければ PATH の gmake)" "brew install make"; fi
 if [ "$REQ_ONLY" -eq 0 ]; then
   echo "--- エージェント(導入の有無。認証・上限は agents-probe.sh)"
-  for a in $(python3 "$HERE/src/hooks/agentconf.py" agents 2>/dev/null || true); do
+  for a in $(AGENTS_CONF="$HERE/src/hooks/agents.conf" python3 "$HERE/src/hooks/agentconf.py" agents 2>/dev/null || true); do
     bin="$(AGENTS_CONF="$HERE/src/hooks/agents.conf" python3 "$HERE/src/hooks/agentconf.py" get "$a" bin 2>/dev/null)"
     command -v "${bin:-$a}" >/dev/null 2>&1 && printf '[  OK   ] %s\n' "$a" || printf '[  --   ] %s (未導入)\n' "$a"
   done

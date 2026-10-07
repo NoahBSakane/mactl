@@ -4,7 +4,7 @@ Mac のセットアップ・保守・掃除を `mactl` にまとめたリポジ�
 
 ## 新しいMacでの手順
 
-前提は macOS、Git、GNU Make（Homebrew の `make`）、導入・zsh有効化済みの mise、jq。setup は既存インストーラによる設定の復元で、Homebrew・mise 本体を導入するものではない。mise の有効化行は [mise-uv-config の説明](setup/mise-uv-config/mise-uv-config.md) を参照。
+前提は macOS、Git、GNU Make（Homebrew の `make`）、導入・zsh有効化済みの mise、jq、python3（3.8以上）。`mactl doctor` で確認できる。setup は既存インストーラによる設定の復元で、Homebrew・mise 本体を導入するものではない。mise の有効化行は [mise-uv-config の説明](setup/mise-uv-config/mise-uv-config.md) を参照。
 
 ```sh
 git clone https://github.com/NoahBSakane/mactl.git
@@ -16,7 +16,7 @@ mactl setup
 
 `install.sh` は `~/.local/bin/mactl` → このクローンの `bin/mactl` のリンクを設置する。既存リンクは張り直し、通常ファイルは `.bak.<日時>` に退避する。再実行可能。クローンを移動した場合は再実行する。`~/.local/bin` はシェルの PATH にも追加しておく。
 
-`setup` は実行内容を表示し、y/N 確認後に **mise-uv-config → ai-agent-config → login-items → cursor-sidebar-icon-patch** の順で実行する。失敗した時点で停止し、非0終了する。`mactl setup -y` で確認を省略できる。ai-agent-config は manifest 駆動で、配備先のファイルが前回の配備のあとに編集されていると、何も変えずに中止する(`DRIFT`)。確認の仕方と用語は [setup-guide.md](setup/ai-agent-config/setup-guide.md)。login-items.d 内の個別スクリプトはこのリポジトリに含まれない。
+`setup` は実行内容を表示し、y/N 確認後に **mise-uv-config → ai-agent-config → login-items → cursor-sidebar-icon-patch** の順で実行する。失敗した時点で停止し、非0終了する。`mactl setup -y` で確認を省略できる。ai-agent-config は manifest 駆動で、配備先のファイルが前回の配備のあとに編集されていると、何も変えずに中止する(`DRIFT`)。確認の仕方と用語は [setup-guide.md](setup/ai-agent-config/setup-guide.md)。`DRIFT` で止まると、`mactl setup` の後続(login-items・cursor-sidebar-icon-patch)も実行されないので、`setup/ai-agent-config/diff-ai-agent-config.sh` で差分を見てから、`install.sh -f` を実行する。login-items.d 内の個別スクリプトはこのリポジトリに含まれない。
 
 保守には既存環境の Homebrew、mas、mise 管理下の各言語ツールを使用する。GNU Make は `/opt/homebrew/opt/make/libexec/gnubin/make` を優先し、なければ PATH の `gmake` を使う。mise 本体は `$HOME/.local/bin/mise`。App Store 更新の mas は従来の `/opt/homebrew/bin/mas` を使用する。
 
