@@ -25,10 +25,12 @@ Claude Code / Codex CLI / Antigravity CLI(`agy`)/ Muse Code / Grok Build とい�
 | `~/.knowledge/ai-agents.md` | seed | 台帳。最初だけ配置し、以降は live側が作業用の正本(`refresh-registry` が更新) |
 | `~/.knowledge/bin/agents-probe.sh`、`agent-takeover.sh`、`memory-harvest.sh`、`ofuro-run.sh` | copy | 状況の取得、別エージェントへの引き継ぎ起動、エージェントのメモリの収穫対象の一覧(いずれも `agents.conf` を読む)、お風呂モードの非対話起動(`claude -p "/ofuro ..."`) |
 | `~/.knowledge/rule-proposals.md` | seed | ルール提案の受け箱(最初だけ配置) |
+| `~/.knowledge/gas-apps-script.md`、`writing-styles.md` | seed | 知識ファイル(GASの運用の知見、Slack・Notionの書き方の好み)。最初だけ配置し、以降は live 側が正本。公開リポジトリに載るので、社内のリポジトリ名・クライアント名・ID・人名は一般名・プレースホルダに置き換えてある(この Mac の live 側は元のまま) |
 | `~/.agents/hooks/` | copydir | hookスクリプトと、エージェント固有の情報を集めた `agents.conf` |
 | `~/.agents/skills/<name>`、`~/.claude/skills/<name>`(symlink) | copydir / link | `orchestrate-agents`・`ofuro`・`refresh-registry`・`propose-rule`・`triage-rules` |
 | `~/.claude/settings.json`、`~/.codex/hooks.json`、`~/.config/muse/settings.json` | merge-hooks | 管理対象のhookエントリだけをマージ(他のキーは触らない)。Codex・Museは導入時のみ |
 | `~/.claude/settings.json` の `permissions.defaultMode` と `skillOverrides`(14本) | merge-enforce | `/doctor` で決めた設定(自動モード、使わない同期skillの無効化)を**上書きで強制**する。手で変えた値は次のinstallで戻り、diffは `UPDATE` として報告する。断片に書いていないキー(自分で足した `skillOverrides` など)は触らない |
+| `~/.claude/settings.json` の `autoMode.environment` | merge-union | 自動モードの分類器に、信頼するリポジトリ(`github.com/NoahBSakane/mactl`、公開)を教える。分類器は `autoMode` をユーザー単位(`~/.claude/settings.json`)からしか読まないので、プロジェクトの設定では置けず、ここから配備する。配列は和集合で足し(`$defaults` を含む)、ユーザーが足した項目は消さない |
 | `~/.config/muse/settings.json` の `context` | merge-muse-context | Museの他エージェントのrules・skillsの自動取り込みを止める |
 | `~/.gemini/config/hooks.json`、`~/.gemini/config/skills.json` | merge-agy-hooks / merge-agy-skills | agyの名前付きhook集合(`ai-agent-config`)と、共有skillsの絶対パス登録。agy導入時のみ |
 | `~/.gemini/antigravity-cli/settings.json` | merge-union | agyの無人調査用の許可ルール(`permissions.allow` の `read_url(<ドメイン>)`。`src/agy-settings-allow.json`)。配列は和集合で足し、ユーザーが足した許可は消さない。agy導入時のみ |

@@ -40,6 +40,8 @@ codex-persona	merge-codex-persona	src/codex-persona.md	~/.codex/config.toml	cmd:
 registry	seed	src/agents-registry.md	~/.knowledge/ai-agents.md	always
 probe	copy	src/bin/agents-probe.sh	~/.knowledge/bin/agents-probe.sh	always
 memory-harvest	copy	src/bin/memory-harvest.sh	~/.knowledge/bin/memory-harvest.sh	always
+gas-knowledge	seed	src/knowledge/gas-apps-script.md	~/.knowledge/gas-apps-script.md	always
+writing-styles	seed	src/knowledge/writing-styles.md	~/.knowledge/writing-styles.md	always
 working-practices	copy	src/knowledge/working-practices.md	~/.knowledge/working-practices.md	always
 rule-proposals	seed	src/rule-proposals.md	~/.knowledge/rule-proposals.md	always
 takeover	copy	agent-takeover.sh	~/.knowledge/bin/agent-takeover.sh	always
@@ -57,6 +59,7 @@ claude-skill-propose-rule	link	~/.agents/skills/propose-rule	~/.claude/skills/pr
 claude-skill-triage-rules	link	~/.agents/skills/triage-rules	~/.claude/skills/triage-rules	always
 claude-settings-hooks	merge-hooks	src/hooks/claude-hooks.json	~/.claude/settings.json	always
 claude-settings-enforced	merge-enforce	src/claude-settings-enforced.json	~/.claude/settings.json	always
+claude-settings-automode	merge-union	src/claude-settings-automode.json	~/.claude/settings.json	always
 legacy-hook-shims	shims	-	~/.claude/hooks/delegation	always
 codex-hooks	merge-hooks	src/hooks/codex-hooks.json	~/.codex/hooks.json	cmd:codex
 muse-hooks	merge-hooks	src/hooks/muse-hooks.json	~/.config/muse/settings.json	cmd:muse

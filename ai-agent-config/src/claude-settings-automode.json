@@ -1,0 +1,9 @@
+{
+  "autoMode": {
+    "environment": [
+      "$defaults",
+      "Source control: github.com/NoahBSakane/mactl is the user's own repository for this Mac's setup scripts and docs (public). Fetching, pulling and pushing its branches is routine work.",
+      "Repository visibility: github.com/NoahBSakane/mactl is public. Its own work (the agent-config scripts, hooks, tests and docs) may be committed and pushed there; secrets, tokens and personal or company data never may."
+    ]
+  }
+}

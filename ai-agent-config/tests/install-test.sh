@@ -27,7 +27,7 @@ mkdir -p "$HOME/.gemini/antigravity-cli"; echo '{"colorScheme":"dark","permissio
 mkdir -p "$HOME/.config/muse"
 echo '{"schema_version":1,"tui":{"foreign_context_notice_shown":true}}' >"$HOME/.config/muse/settings.json"
 cat >"$HOME/.claude/settings.json" <<EOF
-{"model":"sonnet","permissions":{"allow":["Bash(ls *)"]},
+{"model":"sonnet","permissions":{"allow":["Bash(ls *)"]},"autoMode":{"environment":["Source control: my own org"]},
  "hooks":{"UserPromptSubmit":[{"hooks":[{"type":"command","command":"\$HOME/.claude/hooks/delegation/user-prompt-delegation-reminder.sh"},
                                          {"type":"command","command":"/usr/local/bin/my-own-hook.sh"}]}],
           "PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"\$HOME/.claude/hooks/delegation/pre-edit-composition-check.sh"}]}]}}
@@ -74,6 +74,8 @@ jq -e '.colorScheme=="dark" and (.permissions.allow|index("command(my own tool)"
 
 # 3c. enforced settings are applied, and unrelated keys are kept
 jq -e '.permissions.defaultMode=="auto" and (.skillOverrides|length)==14 and .permissions.allow[0]=="Bash(ls *)"' "$HOME/.claude/settings.json" >/dev/null && ok || bad "enforced settings applied, existing permissions kept"
+jq -e '.autoMode.environment | index("Source control: my own org") != null and index("$defaults") != null and (map(select(test("NoahBSakane/mactl"))) | length) == 2' "$HOME/.claude/settings.json" >/dev/null && ok || bad "autoMode: our trusted-repo entries added, the user's own entry kept (union)"
+[ -f "$HOME/.knowledge/gas-apps-script.md" ] && [ -f "$HOME/.knowledge/writing-styles.md" ] && ok || bad "knowledge seeds placed when absent"
 
 # 4. idempotent; diff script agrees
 out="$(bash "$CFG/install.sh" -y 2>&1)"; code "re-run exits 0" 0 $?
@@ -148,6 +150,7 @@ bash "$CFG/install.sh" -r "$first" -y >/dev/null 2>&1
 [ "$(cat "$HOME/.claude/CLAUDE.md")" = "old claude" ] && ok || bad "rollback restores CLAUDE.md"
 jq -e '[.. | .command? // empty | select(test("\\.agents/hooks"))] | length == 0' "$HOME/.claude/settings.json" >/dev/null && ok || bad "rollback removes our hook entries"
 jq -e '.model=="sonnet"' "$HOME/.claude/settings.json" >/dev/null && ok || bad "rollback keeps unrelated settings"
+jq -e '.autoMode.environment == ["Source control: my own org"]' "$HOME/.claude/settings.json" >/dev/null && ok || bad "rollback takes only our autoMode entries out"
 jq -e '.description=="mine" and ([.. | .command? // empty | select(test("agents/hooks"))] | length == 0) and ([.. | .command? // empty | select(. == "/opt/my-codex-stop.sh")] | length == 1)' "$HOME/.codex/hooks.json" >/dev/null && ok || bad "rollback unmerges codex hooks, keeps the user's"
 jq -e '.tui.foreign_context_notice_shown==true and (has("hooks")|not) and (has("context")|not)' "$HOME/.config/muse/settings.json" >/dev/null && ok || bad "rollback unmerges muse hooks and context"
 [ ! -e "$HOME/.config/muse/AGENTS.md" ] && ok || bad "rollback removes muse AGENTS.md"
