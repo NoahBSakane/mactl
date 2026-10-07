@@ -1,29 +1,29 @@
 ---
 name: reconcile-agent-config
-description: mac-setupリポジトリ専用。manifest.tsv が管理する配備物(~/AGENTS.md、~/.claude/CLAUDE.md、~/.codex/AGENTS.md、台帳、skills、hook、settings.jsonのhook設定など)について、このMac上のlive側とrepo側(ai-agent-config/src/)の食い違いを調べ、どちらを採用するか、両方の変更を1本に統合(止揚)するかを判断して両側に反映する。install.shが「DRIFTのため中止」と出した時にも使う。
+description: mactlリポジトリ専用。manifest.tsv が管理する配備物(~/AGENTS.md、~/.claude/CLAUDE.md、~/.codex/AGENTS.md、台帳、skills、hook、settings.jsonのhook設定など)について、このMac上のlive側とrepo側(setup/ai-agent-config/src/)の食い違いを調べ、どちらを採用するか、両方の変更を1本に統合(止揚)するかを判断して両側に反映する。install.shが「DRIFTのため中止」と出した時にも使う。
 ---
 
 # reconcile-agent-config
 
-`mac-setup` リポジトリ専用。対象は `ai-agent-config/manifest.tsv` の全行。manifestに無いものは管理対象外。
+`mactl` リポジトリ専用。対象は `setup/ai-agent-config/manifest.tsv` の全行。manifestに無いものは管理対象外。
 
 ## 前提(事実)
 
-- repo側が正本(`ai-agent-config/src/`)。live側は配備物。ただし日常の編集は、エージェントとの対話中にlive側(`~/.claude/CLAUDE.md` 等)を直接書き換えて行われがちなので、食い違いは起こる。
+- repo側が正本(`setup/ai-agent-config/src/`)。live側は配備物。ただし日常の編集は、エージェントとの対話中にlive側(`~/.claude/CLAUDE.md` 等)を直接書き換えて行われがちなので、食い違いは起こる。
 - **台帳(`registry` 行)だけは live側(`~/.knowledge/ai-agents.md`)が作業用の正本。** `refresh-registry` skill が自動で更新するので、live側を採用してrepoへ取り込むのが基本(repo側は初期配備用の種)。
-- 行の方式(`copy`・`seed`・`link`・`copydir`・`merge-*`・`shims`)の定義は、`ai-agent-config/manifest.tsv` 冒頭のコメントが正本。
+- 行の方式(`copy`・`seed`・`link`・`copydir`・`merge-*`・`shims`)の定義は、`setup/ai-agent-config/manifest.tsv` 冒頭のコメントが正本。
 - 事実の訂正済み事項(古い記述を見つけたら直す): ClaudeCodeは、CLAUDE.mdが無いときに限り AGENTS.md を直接読むので、CLAUDE.mdがある環境では `@AGENTS.md` のimportが必要。agyにも `~/.gemini/AGENTS.md` のグローバルrulesがある(実機確認済み)。
 
 ## 手順
 
-1. `ai-agent-config/diff-ai-agent-config.sh` を実行する(判断はせず、全行の状態と差分を出す)。終了コード0なら全行一致で、以降は不要。
+1. `setup/ai-agent-config/diff-ai-agent-config.sh` を実行する(判断はせず、全行の状態と差分を出す)。終了コード0なら全行一致で、以降は不要。
    - `OK` 一致 / `MISSING` 未配備 / `UPDATE` repoが新しい(liveは前回installのまま。そのままinstallで更新できる) / `DRIFT` liveが編集されている / `SKIP` 条件外(CLI未導入)
 2. `DRIFT` の行について、差分のhunkごとに次のどれかを判断する:
    - **repo側を採用**: live側の変更が、このMac固有の一時的な事情によるもので、他のMacへ配る価値が無い
    - **live側を採用**: repo側が単に古く、live側の変更が最新の意図を反映している
    - **統合(止揚)**: 両側にそれぞれ意味のある変更が入っており、どちらかを切り捨てると情報が失われる。「後勝ち」や機械的なマージではなく、両方の意図を汲んで1つの自然な文章に書き直す
    - 判断に迷うhunkは推測で決めず、差分を具体的に示してユーザーに選んでもらう
-3. 決めた内容を、**リポジトリの `ai-agent-config/src/` の該当ファイルに書き**、`install.sh -f`(確認あり。`-fy` で確認なし)で live側へ配備する。配備された指示ファイル(`~/AGENTS.md`、`~/.claude/CLAUDE.md` など)を、エージェントが直接編集することは、hookが拒否する(あなた自身がliveを直接編集した場合の取り込み先も、`src/`)。片方だけ直すと、次回の diff で再び差分になる。
+3. 決めた内容を、**リポジトリの `setup/ai-agent-config/src/` の該当ファイルに書き**、`install.sh -f`(確認あり。`-fy` で確認なし)で live側へ配備する。配備された指示ファイル(`~/AGENTS.md`、`~/.claude/CLAUDE.md` など)を、エージェントが直接編集することは、hookが拒否する(あなた自身がliveを直接編集した場合の取り込み先も、`src/`)。片方だけ直すと、次回の diff で再び差分になる。
 4. 反映後に `diff-ai-agent-config.sh` を再実行し、`OK` になったことを確かめる。repo側を変えたら、何が変わったかを要約する。コミットは指示があるまで実行しない。
 5. 内容の大部分を書き換える場合は、書き換え前の内容を一度提示してから上書きする(`install.sh` は上書き前に `~/.agent-state/backups/` へ退避する)。
 

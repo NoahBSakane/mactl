@@ -21,7 +21,7 @@ trap 'rm -rf "$WORK"' EXIT
 
 command -v jq >/dev/null 2>&1 || { echo "jq is required" >&2; exit 1; }
 
-expand() { # ~ expansion; bare relative paths are relative to ai-agent-config/
+expand() { # ~ expansion; bare relative paths are relative to setup/ai-agent-config/
   local p="$1"; p="${p/#\~/$HOME}"
   case "$p" in /*) ;; *) p="$CFG_DIR/$p" ;; esac
   printf '%s' "$p"

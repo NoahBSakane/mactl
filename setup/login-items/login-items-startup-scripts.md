@@ -20,7 +20,7 @@ macOSで「PCの再起動・ログインのたびに何かを自動実行した�
 ## 設置先とコード
 
 ```text
-mac-setup/login-items/
+mactl/setup/login-items/
   login-items-startup-scripts.md              → このファイル
   run-login-items.sh                          → 設置先: ~/Library/Scripts/run-login-items.sh
   com.nbs.login-items-runner.plist.template   → install-login-items-runner.shが
@@ -32,7 +32,7 @@ mac-setup/login-items/
 [cursor-claude-codex-sidebar-fix.md](../cursor-sidebar-icon-patch/cursor-claude-codex-sidebar-fix.md)側と同じ理由(launchdが`~`や`$HOME`を展開できない)で`.plist`はテンプレート化してあり、
 
 ```bash
-mac-setup/login-items/install-login-items-runner.sh
+mactl/setup/login-items/install-login-items-runner.sh
 ```
 
 を実行するだけで再設置できる。

@@ -11,8 +11,8 @@ AIコーディングエージェントの共通設定(指示ファイル・skill
 ## 手順1: リポジトリを取得する
 
 ```bash
-git clone <このリポジトリのURL> ~/Repo/mac-setup
-cd ~/Repo/mac-setup/ai-agent-config
+git clone https://github.com/NoahBSakane/mactl.git ~/Repo/mactl
+cd ~/Repo/mactl/setup/ai-agent-config
 ```
 
 すでに取得済みなら `git pull` で最新にします。

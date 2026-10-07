@@ -36,7 +36,7 @@ if command -v python3 >/dev/null 2>&1 && ! python3 -c 'import sys; sys.exit(0 if
 fi
 row need git "リポジトリの操作"
 if command -v shasum >/dev/null 2>&1 || command -v sha256sum >/dev/null 2>&1; then [ "$REQ_ONLY" -eq 1 ] || printf '[  OK   ] %-8s %s\n' sha256 "ハッシュ(drift の検出)"; else miss=$((miss+1)); printf '[MISSING] %-8s %s → %s\n' shasum "ハッシュ" "$(hint shasum)"; fi
-for t in awk sed find; do row need "$t" "標準コマンド"; done
+for t in awk sed find dirname basename mktemp; do row need "$t" "標準コマンド"; done
 row want gh "このリポジトリへ push するとき(NoahBSakane でログイン)"
 row want node "markdownlint(編集直後の検査)"
 row want npx "markdownlint(編集直後の検査)"

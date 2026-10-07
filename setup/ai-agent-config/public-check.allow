@@ -1,7 +1,11 @@
 # 偽の値(検査の動作確認用)
-secret	ai-agent-config/tests/hooks-test.sh
-email	ai-agent-config/tests/public-check-test.sh
-slack-id	ai-agent-config/tests/public-check-test.sh
-uuid	ai-agent-config/tests/public-check-test.sh
-home-path	ai-agent-config/tests/public-check-test.sh
-secret	ai-agent-config/tests/public-check-test.sh
+secret	setup/ai-agent-config/tests/hooks-test.sh
+email	setup/ai-agent-config/tests/public-check-test.sh
+slack-id	setup/ai-agent-config/tests/public-check-test.sh
+uuid	setup/ai-agent-config/tests/public-check-test.sh
+home-path	setup/ai-agent-config/tests/public-check-test.sh
+secret	setup/ai-agent-config/tests/public-check-test.sh
+# あちら側(mactl-consolidation)の既存の記述: 保守が除外するフォルダ名の既定値(このリポジトリの元の設定)
+denylist	Makefile
+denylist	README.md
+denylist	maintain/*

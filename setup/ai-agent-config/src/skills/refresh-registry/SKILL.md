@@ -22,7 +22,7 @@ description: エージェント台帳(~/.knowledge/ai-agents.md)を再調査し�
    - `flags` コメントは、実在を確認できたフラグだけにする。
    - **代行先の優先順位**(台帳の同名の節)も、最新の指数と、導入・認証・配線の状況から見直す。根拠の数値と日付を、本文ではなく台帳のその節に書く。
 4. 更新したエージェントの `<!-- verified agent=... date=今日 -->` の日付を更新する。
-5. 台帳のこのMacのファイルは `~/.knowledge/ai-agents.md`、リポジトリ側の正本は `ai-agent-config/src/agents-registry.md`(同じ内容の別の場所)。リポジトリ側へは、reconcile-agent-config skill(リポジトリ内の `.claude/skills/`)で反映する(急がなくてよい)。
+5. 台帳のこのMacのファイルは `~/.knowledge/ai-agents.md`、リポジトリ側の正本は `setup/ai-agent-config/src/agents-registry.md`(同じ内容の別の場所)。リポジトリ側へは、reconcile-agent-config skill(リポジトリ内の `.claude/skills/`)で反映する(急がなくてよい)。
 
 ## ユーザーを中断する場合(これ以外は静かに更新して作業を続ける)
 

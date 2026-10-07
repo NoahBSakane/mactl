@@ -43,7 +43,7 @@ if [ ! -e "$hook" ] || grep -q "public-check" "$hook" 2>/dev/null; then
   mkdir -p "$(dirname "$hook")"
   cat >"$hook" <<'HOOK'
 #!/bin/bash
-# installed by setup-git-account.sh: scan what is about to be pushed (ai-agent-config/public-check.py)
+# installed by setup-git-account.sh: scan what is about to be pushed (setup/ai-agent-config/public-check.py)
 top="$(git rev-parse --show-toplevel)" || exit 0
 f="$(git -C "$top" ls-files '*public-check.py' | head -1)"
 [ -n "$f" ] && [ -f "$top/$f" ] || exit 0

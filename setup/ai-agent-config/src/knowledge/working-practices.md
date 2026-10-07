@@ -39,3 +39,19 @@
 ### 2026-10-07 — Markdownを書いたら、markdownlintの指摘をゼロにする
 
 `.md` を作成・編集したら、markdownlint の指摘をゼロにして終える。編集の直後にhook(`~/.agents/hooks/md-lint.sh`)が検査し、指摘を返すので、その場で直す。MD013(行の長さ)は、日本語を含む行には適用しない(英語だけの行は、プロジェクトの設定、無ければ120桁)。手で確かめるときは `python3 ~/.agents/hooks/md-lint.py <file.md>`。
+
+### 2026-09-02 — Work out how cost scales with N before dispatching a parallelisation or architecture change
+
+When proposing or approving an implementation that touches performance or scaling (parallelisation, sharding,
+batching, caching), write out algebraically how each participant's cost scales with the relevant size parameter(s)
+*before* dispatching the implementation. In particular, look for a straggler or worst-case actor whose cost grows with
+its position or index instead of staying `O(N/W)`. A small-scale test passing is not a substitute: it can look like a
+real win while hiding an asymptotic problem that only bites at the actual target scale.
+
+Concrete case: a video-frame-capture pipeline was parallelised across W workers by contiguous frame ranges, but
+correctness required each worker to replay all earlier frames from 0 before starting its own range (to rebuild
+animation state that only holds if built up frame by frame). The last worker's replay cost is `(W-1)/W` of the entire
+original sequential job. That is fully predictable on paper, yet it only surfaced after implementing and testing at a
+small frame count, where the effect still looked like a modest win. The scale-invariant fix (every worker walks the
+full range but captures only its own slice) keeps the cost ratio constant whatever N is; verify that kind of claim by
+reasoning about how the ratio behaves as N grows, not by retesting at one more arbitrary N and hoping it generalises.

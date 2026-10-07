@@ -1,7 +1,7 @@
 # ai-agent-config manifest: one deployed artifact per line (tab separated).
 #   id            unique name (also the backup/state key)
 #   mode          copy | seed | link | copydir | merge-hooks | merge-agy-hooks | merge-agy-skills | merge-muse-context | merge-enforce | merge-union | project | merge-codex-persona | shims
-#   src           copy/seed/copydir: path relative to ai-agent-config/
+#   src           copy/seed/copydir: path relative to setup/ai-agent-config/
 #                 link: the *target* the symlink points to | merge-*: JSON fragment | shims: -
 #   dest          where it lives on this Mac (~ allowed)
 #   cond          always | cmd:<binary>  (deployed only when that CLI is installed)

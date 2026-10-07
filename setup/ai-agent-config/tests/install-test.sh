@@ -162,7 +162,7 @@ bash "$CFG/install.sh" -f -y >/dev/null 2>&1
 
 # doctor.sh: the must-have tools are checked first, with a way to get each missing one
 bash "$CFG/doctor.sh" >/dev/null 2>&1; code "doctor passes when the tools are there" 0 $?
-nojq="$(mktemp -d)"; for t in bash python3 git awk sed find shasum; do ln -s "$(command -v $t)" "$nojq/$t"; done
+nojq="$(mktemp -d)"; for t in bash python3 git awk sed find shasum dirname basename mktemp cat; do ln -s "$(command -v $t)" "$nojq/$t"; done
 out="$(PATH="$nojq" /bin/bash "$CFG/install.sh" -n 2>&1)"; rc=$?
 [ "$rc" = 1 ] && grep -q "jq" <<<"$out" && grep -q "brew install jq" <<<"$out" && ok || bad "install.sh stops with the missing tool and how to get it (rc=$rc)"
 rm -rf "$nojq"

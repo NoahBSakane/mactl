@@ -40,22 +40,22 @@ Claude Code / Codex CLI / Antigravity CLI(`agy`)/ Muse Code / Grok Build とい�
 ## 使い方
 
 ```bash
-ai-agent-config/diff-ai-agent-config.sh -b       # 全行の状態(OK/UPDATE/MISSING/DRIFT/ERROR/SKIP)と共通ルールの一致
-ai-agent-config/install.sh                         # 計画を表示 → 「実行しますか? [y/N]」
-ai-agent-config/install.sh -n                      # 計画だけ(dry-run)。-N は変更される内容の差分つき
-ai-agent-config/install.sh -y                      # 確認なしで実行(計画は出さず要約だけ)。-Y は計画と配備した行も出す
-ai-agent-config/install.sh -f                      # live側が編集されていても、退避してから上書き。-F は台帳(seed)も種へ戻す
-ai-agent-config/install.sh -o <ID>                 # manifestの1行(1つの配備物)だけ
-ai-agent-config/install.sh -l                      # 退避(配備履歴)の一覧
-ai-agent-config/install.sh -r [時刻]               # 元に戻す(確認あり。時刻を省くと最新)。-R は戻すと変わる差分も表示
-ai-agent-config/tests/hooks-test.sh                # hookの固定入力テスト
-ai-agent-config/tests/install-test.sh              # install/diff/rollbackの一時HOMEテスト
+setup/ai-agent-config/diff-ai-agent-config.sh -b       # 全行の状態(OK/UPDATE/MISSING/DRIFT/ERROR/SKIP)と共通ルールの一致
+setup/ai-agent-config/install.sh                         # 計画を表示 → 「実行しますか? [y/N]」
+setup/ai-agent-config/install.sh -n                      # 計画だけ(dry-run)。-N は変更される内容の差分つき
+setup/ai-agent-config/install.sh -y                      # 確認なしで実行(計画は出さず要約だけ)。-Y は計画と配備した行も出す
+setup/ai-agent-config/install.sh -f                      # live側が編集されていても、退避してから上書き。-F は台帳(seed)も種へ戻す
+setup/ai-agent-config/install.sh -o <ID>                 # manifestの1行(1つの配備物)だけ
+setup/ai-agent-config/install.sh -l                      # 退避(配備履歴)の一覧
+setup/ai-agent-config/install.sh -r [時刻]               # 元に戻す(確認あり。時刻を省くと最新)。-R は戻すと変わる差分も表示
+setup/ai-agent-config/tests/hooks-test.sh                # hookの固定入力テスト
+setup/ai-agent-config/tests/install-test.sh              # install/diff/rollbackの一時HOMEテスト
 ```
 
 **オプションの規則: 小文字は簡潔(出力は少なめ・対象は狭い)、大文字は詳細・徹底(出力は多め・対象は広い)。** `-n`/`-N`(計画のみ・差分つき)、`-y`/`-Y`(要約だけ・計画も表示)、`-f`/`-F`(DRIFTの上書き・台帳の種への巻き戻しも)、`-r`/`-R`(戻す・差分つき)。長いオプション(`--yes`、`--dry-run`、`--force`、`--rollback` など)も使える。短いオプションは束ねられる(`-fy`)。端末でない実行で `-y`/`-Y` が無いと、計画を表示するだけで実行しない。
 
 - **日常の編集:** 配備された指示ファイル(`~/AGENTS.md` など)は、エージェントが直接編集できない(hookが拒否する)。ルールの追加・変更は、提案(`propose-rule`)→検討(`triage-rules`)→ リポジトリの `src/` を直して `install.sh`、の順に行う。あなた自身がliveを直接編集した場合は、`diff-ai-agent-config.sh` で差分を見て、`/reconcile-agent-config`([.claude/skills/reconcile-agent-config/](../.claude/skills/reconcile-agent-config/SKILL.md))で取り込む。
-- **他のMacへ:** `git clone`(または `git pull`)して `ai-agent-config/install.sh`。初回は既存のliveファイルが `DRIFT` になるので、`diff-ai-agent-config.sh` で内容を確認してから `install.sh -f`(退避先は `~/.agent-state/backups/`)。
+- **他のMacへ:** `git clone`(または `git pull`)して `setup/ai-agent-config/install.sh`。初回は既存のliveファイルが `DRIFT` になるので、`diff-ai-agent-config.sh` で内容を確認してから `install.sh -f`(退避先は `~/.agent-state/backups/`)。
 - 共通ルールを直すときは `src/shared-rules.md` だけを直す(`install.sh` が `~/AGENTS.md` へ反映し、他のエージェントはそのsymlink経由で同じファイルを読む)。
 
 ## プロジェクトへの配置(`project` 行)と、個人用の manifest
@@ -72,7 +72,7 @@ ai-agent-config/tests/install-test.sh              # install/diff/rollbackの一
 このリポジトリは公開です。社内・個人の固有名、ID、人名、秘密が入らないよう、機械で検査し、直し方の提案とローカルでの穴埋めだけ、使っているエージェントに任せます。
 
 - **機械的な検査(常時)**: メールアドレス、Slack ID、UUID、`/Users/<名前>/` のパス、秘密・トークンを探します。`public-check.py`(全追跡ファイル)、`--diff A..B`(追加された行だけ)、`--pre-push`(git の pre-push の入力)。`setup-git-account.sh` が `.git/hooks/pre-push` に設置するので、**push 時に自動で走り**、見つかれば止まります(確認して問題なければ `git push --no-verify`)。hook はスクリプトの移動に備えて、場所を `git ls-files` で探し、見つからなければ通します。
-- **自分用の語**: 社内名・クライアント名・同僚の名前など、リポジトリに書けない語は、`~/.config/ai-agent-config/public-denylist.txt`(1行1正規表現、非公開)に書きます。既知の安全なヒット(テストの偽のキーなど)は、`ai-agent-config/public-check.allow`(`規則<TAB>パスのglob`)。
+- **自分用の語**: 社内名・クライアント名・同僚の名前など、リポジトリに書けない語は、`~/.config/ai-agent-config/public-denylist.txt`(1行1正規表現、非公開)に書きます。既知の安全なヒット(テストの偽のキーなど)は、`setup/ai-agent-config/public-check.allow`(`規則<TAB>パスのglob`)。
 - **提案(エージェント)**: `--suggest` は、ヒットを `agents.conf` の `ask`(道具なし・書き込みなしの質問用テンプレート)で、導入済みのエージェントに渡し、置き換え案を表で出させます。ファイルは編集しません。**ヒットの周辺の文が外部のモデルに渡る**ので、自分で指示したときだけ動きます。
 - **穴埋め(その Mac のエージェント)**: 公開用に一般化した知識ファイルには、`<自分のSlackユーザーID>` のようなプレースホルダが残ります。`--localise` が `~/.knowledge/*.md` の残りを一覧し、`--localise --agent` は、導入済みのエージェントを対話で起動して、この Mac で分かる値で埋めさせます(分からないものはあなたに質問する)。ローカルの知識ファイルなので、リポジトリには戻りません。
 
@@ -88,7 +88,7 @@ ai-agent-config/tests/install-test.sh              # install/diff/rollbackの一
 | `registry-job.sh` | 台帳が14日を超えると、**自動で**調査を起動する。読み取り専用のWeb調査を、`agent-run.sh` が使えるエージェントで実行し、提案レポートを `~/.agent-state/proposals/` に作る。1日1回まで・同時に1本・ジョブ内からは起動しない・調査できるエージェントが無ければ起動しない |
 | `status-line.sh` | 他のエージェントの状況を1行にする(導入済みのものだけ。使用上限中は解除日時を秒まで)。`reminder.sh` が最初のプロンプトと3回に1回、「この行を応答の末尾に添える」指示として渡す(agy は `UserPromptSubmit` 相当が無いので、`agy-adapter.sh` が `PreInvocation` の `invocationNum` が0のとき(ターンの先頭)を数えて、同じ指示を注入する) |
 | `handoff-exclude.sh` / `handoff-exclude-hook.sh` | `.agent-handoff/`(引き継ぎ記録)をGitに入れないよう、`.git/info/exclude` へ自動で追記する(worktree・サブディレクトリ対応、重複しない)。編集ツールが書いた直後と、プロンプトごとに実行する |
-| `doctor.sh`(リポジトリ直下の `ai-agent-config/`) | 前提のツール(必須: jq・python3 3.8+・git・SHA-256・awk・sed・find、任意: gh・node)の点検と、足りないものの入れ方の案内。`install.sh` が最初に `--required` で呼び、足りなければ止める |
+| `doctor.sh`(リポジトリ直下の `setup/ai-agent-config/`) | 前提のツール(必須: jq・python3 3.8+・git・SHA-256・awk・sed・find、任意: gh・node)の点検と、足りないものの入れ方の案内。`install.sh` が最初に `--required` で呼び、足りなければ止める |
 | `fmt-epoch.sh` | 時刻の表示形式を1つにそろえる(`2026-10-10(Sat)11:42:34+09:00`。Asia/Tokyo固定・英語3文字の曜日・コロン付きオフセット)。使用上限の復帰時刻(probe・状態行・通知)と `/ofuro` の終了時刻に使う |
 | `limit-check.sh` | 使用上限が早く解除されていないかの定期確認。記録がある(使えないとされている)エージェントに、`agents.conf` の `ping`(最小の実呼び出し)を、30分に1回まで行う。通れば記録を外して通知し、新しい解除時刻が分かれば記録を動かす。`reminder.sh` がプロンプトごとにバックグラウンドで起動する |
 | `agy-job-guard.sh` | agy の調査ジョブ専用のPreToolUse hook(`AGENT_JOB` があるときだけ有効。失敗時は拒否側)。Web検索とページ取得以外の全ツールと、内部アドレス・認証情報つき・秘密らしき文字列を含むURLを拒否する。これにより、agy の調査を `--dangerously-skip-permissions` で動かしても読み取り専用になる |

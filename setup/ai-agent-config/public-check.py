@@ -31,7 +31,7 @@ EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
 RULES = [
     ("email", re.compile(r"(?<![\w/:@.-])[\w.+-]+@(?!(?:users\.noreply\.github\.com|noreply\.anthropic\.com|github\.com|"
-                         r"example\.(?:com|org|net|invalid)|[\w.-]*\.invalid)\b)[\w-]+(?:\.[\w-]+)+")),
+                         r"example\.(?:com|org|net|invalid)|[\w.-]*\.invalid)\b)[\w-]+(?:\.[\w-]+)*\.[A-Za-z]{2,}\b")),
     ("slack-id", re.compile(r"\b[UWCD]0[0-9A-Z]{8,10}\b")),
     ("uuid", re.compile(r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b")),
     ("home-path", re.compile(r"/Users/(?!(?:you|name|user|username|<)\b)[A-Za-z0-9._-]+/")),
@@ -144,7 +144,7 @@ def report(hits):
         print("%s:%s: [%s] %s" % (path, n, name, text))
     if hits:
         print("\n公開リポジトリに載せてよいか確認してください(%d件)。一般名・プレースホルダに直すか、問題なければ public-check.allow に足す(または git push --no-verify)。" % len(hits), file=sys.stderr)
-        print("直し方の提案が欲しいときは: ai-agent-config/public-check.py --suggest", file=sys.stderr)
+        print("直し方の提案が欲しいときは: setup/ai-agent-config/public-check.py --suggest", file=sys.stderr)
 
 
 def suggest(hits):

@@ -27,7 +27,7 @@ paths=""
 if [ "$tclass" = edit ]; then
   paths="$(edit_paths)"
   if [ "$(printf '%s\n' "$paths" | python3 "$HOOK_DIR/parse_cmd.py" protected 2>/dev/null || true)" = protected ]; then
-    deny "【指示ファイルの直接編集は不可】編集しようとしたファイルは、install.sh が配備・管理する指示ファイルです。ルールを足したい・変えたい場合は、直接編集せず propose-rule skill で ~/.knowledge/rule-proposals.md に提案してください(全体か固有かは、triage-rules skill でユーザーの承認を得て決まります)。採用された内容は、リポジトリ mac-setup/ai-agent-config/src/ を直して install.sh で配備します。"
+    deny "【指示ファイルの直接編集は不可】編集しようとしたファイルは、install.sh が配備・管理する指示ファイルです。ルールを足したい・変えたい場合は、直接編集せず propose-rule skill で ~/.knowledge/rule-proposals.md に提案してください(全体か固有かは、triage-rules skill でユーザーの承認を得て決まります)。採用された内容は、リポジトリ mactl/setup/ai-agent-config/src/ を直して install.sh で配備します。"
   fi
 fi
 

@@ -15,16 +15,16 @@ description: ~/.knowledge/rule-proposals.md に未検討のルール提案が溜
 
    | 判断 | 行き先 |
    | --- | --- |
-   | すべてのエージェントに効く。ツール固有の語を含まない | 共通ルール `ai-agent-config/src/shared-rules.md` の「普遍原則」に**要点を1行**(見出し語・日付つき)。理由・手順の全文は `ai-agent-config/src/knowledge/working-practices.md` に日付つきの節として書く |
-   | Claude Codeのツールや挙動に固有 | `ai-agent-config/src/claude-user.md` |
-   | Codexの応答スタイル | `ai-agent-config/src/codex-persona.md` |
+   | すべてのエージェントに効く。ツール固有の語を含まない | 共通ルール `setup/ai-agent-config/src/shared-rules.md` の「普遍原則」に**要点を1行**(見出し語・日付つき)。理由・手順の全文は `setup/ai-agent-config/src/knowledge/working-practices.md` に日付つきの節として書く |
+   | Claude Codeのツールや挙動に固有 | `setup/ai-agent-config/src/claude-user.md` |
+   | Codexの応答スタイル | `setup/ai-agent-config/src/codex-persona.md` |
    | 他のエージェントに固有 | そのエージェントの指示ファイルの正本を、まず用意する(ユーザーに相談) |
    | 特定のプロジェクトだけ | そのプロジェクトの `AGENTS.md` |
-   | 手順・領域の知識 | 他のMacにも配るなら `ai-agent-config/src/knowledge/<領域>.md` に書き、manifest に `seed` の行を足す(公開リポジトリなので、社内名・IDは書かない)。このMacだけなら `~/.knowledge/<領域>.md`。どちらも、共通ルールの索引に1行足す |
+   | 手順・領域の知識 | 他のMacにも配るなら `setup/ai-agent-config/src/knowledge/<領域>.md` に書き、manifest に `seed` の行を足す(公開リポジトリなので、社内名・IDは書かない)。このMacだけなら `~/.knowledge/<領域>.md`。どちらも、共通ルールの索引に1行足す |
    | 重複・矛盾・一度きりの事情 | 却下、または既存へ統合 |
 
    迷ったら、固有(範囲を狭く)から始める。全体へ広げるのは、他のエージェントでも通じると確かめたあと。
 4. **衝突を確認する。** 既存のルール(`~/AGENTS.md`、`claude-user.md` など)と矛盾・重複しないか、`grep` で確かめる。`shared-rules.md` は約60行、`claude-user.md` は約50行を目安に保つ。共通ルールには要点の1行だけを置き、全文は `working-practices.md`(知識ファイル)へ置く。超えるなら、既存の要点を縮めて全文を知識ファイルへ移す。
 5. **ユーザーに承認を取る。** 質問UIで、提案ごとに「推奨の行き先」と理由を示し、採用・変更・却下を選んでもらう(まとめて聞く)。
-6. **反映する。** 承認された内容を、**リポジトリの `src/`** に書く(`~/AGENTS.md` などの配備先は直接編集しない)。`ai-agent-config/` で `./install.sh` を実行して配備し、`./diff-ai-agent-config.sh` が全行 `OK` で、共通ルールの一致も `OK` であることと、`tests/` が通ることを確かめる。全体のルールを採用したときは、Claude Code で `/doctor prompt-audit` も実行する(指示ファイルの古い記述や矛盾の点検)。
+6. **反映する。** 承認された内容を、**リポジトリの `src/`** に書く(`~/AGENTS.md` などの配備先は直接編集しない)。`setup/ai-agent-config/` で `./install.sh` を実行して配備し、`./diff-ai-agent-config.sh` が全行 `OK` で、共通ルールの一致も `OK` であることと、`tests/` が通ることを確かめる。全体のルールを採用したときは、Claude Code で `/doctor prompt-audit` も実行する(指示ファイルの古い記述や矛盾の点検)。
 7. **状態を更新する。** `rule-proposals.md` の各エントリの `状態:` の行を、`採用(行き先, 日付)` / `却下(理由)` / `統合(提案名)` に書き換える。

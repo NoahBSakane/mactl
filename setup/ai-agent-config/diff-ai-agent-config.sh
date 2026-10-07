@@ -1,7 +1,7 @@
 #!/bin/bash
 # Mechanical half of "does this Mac match the repo?": compares every manifest row with its live
 # artifact and reports. It decides nothing; for which side wins see the reconcile-agent-config
-# skill (../.claude/skills/reconcile-agent-config/SKILL.md).
+# skill (../../.claude/skills/reconcile-agent-config/SKILL.md).
 #
 #   diff-ai-agent-config.sh           status of every row, with a diff for each DRIFT
 #   diff-ai-agent-config.sh -b        status lines only (--brief)
@@ -39,7 +39,7 @@ check_dir "$HOME" CLAUDE.md CLAUDE.local.md GEMINI.md .agents/AGENTS.md
 check_dir "$HOME/.claude" .claude/CLAUDE.md CLAUDE.local.md
 check_dir "$HOME/.codex" CLAUDE.md
 check_dir "$HOME/.gemini" CLAUDE.md
-check_dir "$CFG_DIR/.." .claude/CLAUDE.md CLAUDE.local.md GEMINI.md .agents/AGENTS.md
+check_dir "$CFG_DIR/../.." .claude/CLAUDE.md CLAUDE.local.md GEMINI.md .agents/AGENTS.md
 [ "$found" -eq 1 ] || echo "  なし"
 # the shared rules must be the same content on every route an agent reads them by. Derived from the
 # manifest (no agent is named): every link whose target is ~/AGENTS.md must resolve to that one file,
