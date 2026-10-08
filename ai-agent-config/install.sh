@@ -90,7 +90,7 @@ if [ "$ROLLBACK_REQ" -eq 1 ]; then
     [ "$4" = exists ] || return 0
     case "$2" in
       link) echo "      リンク: 現在 $(readlink "$3" 2>/dev/null || echo '(なし)') → 元 $(readlink "$BK/files/$1" 2>/dev/null)" ;;
-      copydir) diff -ru "$3" "$BK/files/$1" 2>/dev/null | head -30 | sed 's/^/      /' ;;
+      copydir) diff -ru -x __pycache__ -x '*.pyc' "$3" "$BK/files/$1" 2>/dev/null | head -30 | sed 's/^/      /' ;;
       merge-codex-persona|copy|seed) diff -u "$3" "$BK/files/$1" 2>/dev/null | head -30 | sed 's/^/      /' ;;
       merge-*) diff -u <(jq -S . "$3" 2>/dev/null) <(jq -S . "$BK/files/$1" 2>/dev/null) 2>/dev/null | head -30 | sed 's/^/      /' ;;
     esac
@@ -132,7 +132,7 @@ show_diff() { # id mode src dest
   local id="$1" mode="$2" src="$3" dest="$4"
   case "$mode" in
     link) echo "      リンク: $(readlink "$dest" 2>/dev/null || echo '(なし)') → $(expand "$src")" ;;
-    copydir) diff -ru "$dest" "$WORK/$id" 2>/dev/null | head -40 | sed 's/^/      /' ;;
+    copydir) diff -ru -x __pycache__ -x '*.pyc' "$dest" "$WORK/$id" 2>/dev/null | head -40 | sed 's/^/      /' ;;
     merge-codex-persona|copy|seed) diff -u "$dest" "$WORK/$id" 2>/dev/null | head -40 | sed 's/^/      /' || true ;;
     merge-*) diff -u <(jq -S . "$dest" 2>/dev/null) <(jq -S . "$WORK/$id") 2>/dev/null | head -40 | sed 's/^/      /' ;;
     *) diff -u "$dest" "$WORK/$id" 2>/dev/null | head -40 | sed 's/^/      /' ;;
@@ -195,7 +195,7 @@ while [ "$i" -lt "$n" ]; do
   mkdir -p "$(dirname "$dest")"
   case "$mode" in
     copy|seed) [ ! -L "$dest" ] || rm -f "$dest"; cp -p "$WORK/$id" "$dest" ;;
-    copydir) mkdir -p "$dest"; rsync -a --delete "$WORK/$id/" "$dest/" ;;
+    copydir) mkdir -p "$dest"; rsync -a --delete --exclude __pycache__/ --exclude '*.pyc' "$WORK/$id/" "$dest/" ;;
     link) rm -rf "$dest"; ln -s "$(expand "$src")" "$dest" ;;
     merge-*) [ -f "$dest" ] || : >"$dest"; cat "$WORK/$id" >"$dest" ;;
     shims) mkdir -p "$dest"; cp -p "$WORK/$id"/* "$dest/" ;;

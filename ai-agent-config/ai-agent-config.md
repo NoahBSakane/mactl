@@ -93,9 +93,10 @@ ai-agent-config/tests/install-test.sh              # install/diff/rollbackの一
 | `fmt-epoch.sh` | 時刻の表示形式を1つにそろえる(`2026-10-10(Sat)11:42:34+09:00`。Asia/Tokyo固定・英語3文字の曜日・コロン付きオフセット)。使用上限の復帰時刻(probe・状態行・通知)と `/ofuro` の終了時刻に使う |
 | `limit-check.sh` | 使用上限が早く解除されていないかの定期確認。記録がある(使えないとされている)エージェントに、`agents.conf` の `ping`(最小の実呼び出し)を、30分に1回まで行う。通れば記録を外して通知し、新しい解除時刻が分かれば記録を動かす。`reminder.sh` がプロンプトごとにバックグラウンドで起動する |
 | `agy-job-guard.sh` | agy の調査ジョブ専用のPreToolUse hook(`AGENT_JOB` があるときだけ有効。失敗時は拒否側)。Web検索とページ取得以外の全ツールと、内部アドレス・認証情報つき・秘密らしき文字列を含むURLを拒否する。これにより、agy の調査を `--dangerously-skip-permissions` で動かしても読み取り専用になる |
-| `limit-reset.py` | 使用上限の検知はCodexのセッション記録・agyのログの構造化信号を優先し、文面判定を予備に使う。Claude / Muse / Grokは文面のみ。エラー文から解除時刻(ISO・`Oct 10th, 2026 11:42 AM`・`try again at 11:42 AM`・`in 2 hours`・epoch)を読む |
+| `limit-reset.py` | 使用上限の検知はCodexのセッション記録・agyのログの構造化信号→正規表現→AI判定の順(`agent-run.sh`)。Claude / Muse / Grokは構造化信号なし。エラー文から解除時刻(ISO・`Oct 10th, 2026 11:42 AM`・`try again at 11:42 AM`・`in 2 hours`・epoch)を読む |
 | `md-lint.sh` / `md-lint.py` | PostToolUse。編集された `.md` を markdownlint で検査し、指摘をエージェントへ返す(MD013は日本語を含む行に適用しない。設定の無いプロジェクトでは `markdownlint.json`)。Claude・Codex・Muse は PostToolUse の stderr(終了コード2)で返す。agy の PostToolUse は `{}` しか返せないため、`agy-adapter.sh` が指摘をセッションに保管し、次の `PreInvocation` hook が `ephemeralMessage` として注入する |
-| `agent-run.sh` | 汎用のヘッドレス実行。`agents.conf` の順に、未導入・未認証・使用上限中のエージェントを飛ばして試し、使用上限の失敗を検知したら、エラー文が示す解除時刻(`limit-reset.py`が読む。読めなければ6時間後)までそのエージェントを「使えない」と記録して、次のエージェントへ回す |
+| `agent-run.sh` | 汎用のヘッドレス実行。`agents.conf` の順に、未導入・未認証・使用上限中のエージェントを飛ばして試し、使用上限の失敗を検知したら、解除時刻(エラー文を`limit-reset.py`で読む→AI判定の時刻→6時間後の順。過去・14日超先は不採用)までそのエージェントを「使えない」と記録して、次のエージェントへ回す |
+| `limit-judge.sh` | 正規表現で判定できず、弱い語(`quota`・`limit`・`429`など)がある失敗だけ、先頭1500字をデータとしてAIに渡す。90秒以内の応答の最後の空でない行が厳密な`LIMIT [時刻またはUNKNOWN]` / `NOT_LIMIT`形式のときだけ採用し、それ以外は判定不能。`AGENT_JUDGE=1`で再帰を防ぐ |
 | `agents.conf` / `agentconf.py` | エージェント固有の情報(下記) |
 | `ofuro-guard.sh` | お風呂モード中の質問拒否と、Stop時の継続(上限回数と進捗なし判定で、無限に続かない) |
 | `logger.sh`(PostToolUse) | 外部CLI起動とサブエージェントの監査ログ(`~/.agent-state/delegation-log.jsonl`、1MBで回転) |
@@ -114,6 +115,7 @@ ai-agent-config/tests/install-test.sh              # install/diff/rollbackの一
 | `exec_sub`、`exec_flag`、`nonexec_sub` | `parse_cmd.py`(他のエージェントCLIの実行の判定) |
 | `memory` | `memory-harvest.sh`(メモリの収穫) |
 | `research` | `agent-run.sh`(読み取り専用のWeb調査。台帳の自動調査) |
+| `judge` | `limit-judge.sh`(曖昧な使用上限の判定) |
 | `interactive` | `agent-takeover.sh`(別エージェントの起動) |
 | `[runtime]` の `order`、`costly_models` | ヘッドレス実行の順序、お風呂モードで許可が要るモデル |
 

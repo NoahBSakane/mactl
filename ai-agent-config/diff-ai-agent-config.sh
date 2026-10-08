@@ -21,7 +21,7 @@ report() {
   bad=1
   [ "$ST" != ERROR ] || { echo "  $(cat "$WORK/$id.err" 2>/dev/null | head -1)"; return; }
   [ "$BRIEF" -eq 0 ] && [ "$ST" = DRIFT ] || return 0
-  if [ -d "$dest" ] && [ ! -L "$dest" ]; then diff -ru "$WORK/$id" "$dest" | head -60
+  if [ -d "$dest" ] && [ ! -L "$dest" ]; then diff -ru -x __pycache__ -x '*.pyc' "$WORK/$id" "$dest" | head -60
   elif [ -f "$dest" ] && [ -f "$WORK/$id" ]; then diff -u "$WORK/$id" "$dest" | head -60
   else echo "  (live: $(hash_path "$dest") / repo: $WANT)"; fi
 }

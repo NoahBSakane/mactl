@@ -6,8 +6,8 @@
 #
 # Agents are tried in the order of [runtime] order in agents.conf. One that has no template for
 # the key, is not installed, is logged out, or is marked unavailable is skipped. A run that
-# fails with a recent structured usage-limit signal (or a matching error text) marks that agent
-# unavailable until the moment its error text names (limit-reset.py; 6 hours when it names none), in
+# fails with a structured signal, matching error text, or an AI-confirmed refusal marks that agent
+# unavailable until the reset from its text or judge (6 hours when neither names one), in
 # ~/.agent-state/unavailable/<agent>.txt, and the next agent takes over.
 # stdout: the job's output. stderr: `# agent: <name>` on success. Exit 0 on success.
 # The jobs run with AGENT_JOB=1 and AGENT_DELEGATED_BY=agent-run (no approval prompts, no
@@ -60,10 +60,25 @@ PY
   if [ "$structured_limit" -eq 0 ]; then
     sample="$( { tail -n 20 "$err"; [ "$(wc -c <"$out")" -le 600 ] && cat "$out"; } | head -c 4000)"
   fi
-  if [ "$structured_limit" -eq 1 ] || printf '%s' "$sample" | python3 "$HOOK_DIR/limit-reset.py" --is-limit; then
+  is_limit="$structured_limit"; judge_epoch=""
+  if [ "$is_limit" -eq 0 ]; then
+    if printf '%s' "$sample" | python3 "$HOOK_DIR/limit-reset.py" --is-limit; then is_limit=1
+    elif [ -z "${AGENT_JUDGE:-}" ] && printf '%s' "$sample" | grep -Eiq 'quota|limit|\b429\b|too many|\brate\b|\bresets?\b|try again|exhaust|\busage\b|capacity|overload|credit|billing|exceed'; then
+      # Only ambiguous failures need a judge; judge jobs must never recurse.
+      judge_input="$(mktemp)"
+      printf '%s' "$sample" >"$judge_input"
+      judgment="$(bash "$HOOK_DIR/limit-judge.sh" "$judge_input")"
+      rm -f "$judge_input"
+      if [ "${judgment%%$'\t'*}" = LIMIT ]; then
+        is_limit=1; judge_epoch="${judgment#*$'\t'}"
+      fi
+    fi
+  fi
+  if [ "$is_limit" -eq 1 ]; then
     mkdir -p "$STATE/unavailable"
     until_epoch="$(printf '%s' "$sample" | python3 "$HOOK_DIR/limit-reset.py" 2>/dev/null)"
-    if [ -n "$until_epoch" ]; then note="使用上限(agent-runが検知。エラー文の解除時刻まで)"
+    [ -n "$until_epoch" ] || until_epoch="$judge_epoch"
+    if [ -n "$until_epoch" ]; then note="使用上限(agent-runが検知。判定した解除時刻まで)"
     else until_epoch=$(( $(date +%s) + 21600 )); note="使用上限(agent-runが検知。解除時刻が読めないため6時間後に再試行)"; fi
     printf '%s\t%s\n' "$until_epoch" "$note" >"$STATE/unavailable/$a.txt"
     tried="$tried $a(使用上限・復帰: $(bash "$HOOK_DIR/fmt-epoch.sh" "$until_epoch"))"

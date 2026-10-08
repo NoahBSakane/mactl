@@ -140,6 +140,11 @@ bash "$CFG/install.sh" -y >/dev/null 2>&1; code "update installs without --force
 cp "$HOME/shared-rules.orig" "$CFG/src/shared-rules.md"
 bash "$CFG/install.sh" -y >/dev/null 2>&1
 
+# 5b. Python caches in a deployed folder are not an edit
+mkdir -p "$HOME/.agents/hooks/__pycache__"; echo junk >"$HOME/.agents/hooks/__pycache__/x.cpython-314.pyc"
+bash "$CFG/diff-ai-agent-config.sh" --brief 2>&1 | grep -q "^\[DRIFT" && bad "a __pycache__ in the live folder is not DRIFT" || ok
+rm -rf "$HOME/.agents/hooks/__pycache__"
+
 # 6. live edit -> DRIFT -> install refuses
 echo "my local edit" >>"$HOME/AGENTS.md"
 bash "$CFG/diff-ai-agent-config.sh" --brief 2>&1 | grep -q "^\[DRIFT" && ok || bad "live edit shows as DRIFT"
