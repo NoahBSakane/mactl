@@ -9,6 +9,7 @@ HOOKS="$(cd "$HERE/../src/hooks" && pwd)"
 TMP_HOME="$(mktemp -d)"
 trap 'rm -rf "$TMP_HOME"' EXIT
 export HOME="$TMP_HOME" AGENT_STATE_DIR="$TMP_HOME/.agent-state" AGENTS_HOOKS_DIR="$HOOKS"
+export CODEX_HOME="$TMP_HOME/codex" AGY_LOG_DIR="$TMP_HOME/agy-log"
 unset AGENT_DELEGATED_BY
 # Never call a real agent from a test: same tool/exec data as agents.conf, but no research/interactive templates
 SAFE_CONF="$TMP_HOME/agents.conf"
@@ -344,6 +345,99 @@ rm -rf "$AGENT_STATE_DIR/unavailable"
 AGENTS_CONF="$RS" bash "$HOOKS/agent-run.sh" research "$TMP_HOME/p.txt" >/dev/null 2>&1
 [ ! -e "$AGENT_STATE_DIR/unavailable/c.txt" ] && ok || bad "agent-run: ordinary output that mentions quotas does not mark the agent unavailable"
 
+# ---------- structured usage-limit signals (isolated session/log fixtures) ----------
+since=$(date +%s)
+fixture() { # agent signal line age file age
+  python3 - "$1" "$2" "$since" "${3:-0}" "${4:-0}" <<'PY'
+import json, os, sys
+from datetime import datetime, timezone
+from pathlib import Path
+agent, signal, since, age, file_age = sys.argv[1:]
+since = int(since)
+stamp = since - int(age)
+if agent == "codex":
+    root = Path(os.environ["CODEX_HOME"]) / "sessions" / datetime.fromtimestamp(since).strftime("%Y/%m/%d")
+    root.mkdir(parents=True, exist_ok=True)
+    path = root / "rollout-test.jsonl"
+    event = {"timestamp": datetime.fromtimestamp(stamp, timezone.utc).isoformat().replace("+00:00", "Z"),
+             "type": "event_msg", "payload": {"type": "task_complete", "error": {
+                 "codex_error_info": signal, "message": "refusal\nresets_at: " + str(since + 172800)}}}
+    path.write_text(json.dumps(event) + "\n")
+else:
+    root = Path(os.environ["AGY_LOG_DIR"])
+    root.mkdir(parents=True, exist_ok=True)
+    path = root / "cli-test.log"
+    path.write_text(datetime.fromtimestamp(stamp).strftime("I%m%d %H:%M:%S.000000") +
+                    " 123 cli: " + signal + " (code 429): Individual quota reached. Resets in 2 hours\n")
+os.utime(path, (since - int(file_age), since - int(file_age)))
+PY
+}
+structured() {
+  OUT="$(python3 "$HOOKS/limit-reset.py" --structured "$1" --since "$since" 2>"$TMP_HOME/err")"; RC=$?
+  expect_code "structured $1: $2" "$3" "$RC"
+  if [ "$3" = 1 ]; then
+    [ -z "$OUT" ] && [ ! -s "$TMP_HOME/err" ] && ok || bad "structured $1: failures produce no output"
+  fi
+}
+fixture codex usage_limit_exceeded
+structured codex "recent usage limit" 0
+[ "$OUT" = "refusal resets_at: $((since + 172800))" ] && ok || bad "structured codex: message becomes one line"
+fixture codex server_overloaded
+structured codex "other server error" 1
+fixture codex usage_limit_exceeded 60
+structured codex "old event in a fresh file" 1
+fixture codex usage_limit_exceeded 0 60
+structured codex "old file with a fresh event" 1
+fixture codex usage_limit_exceeded 5
+structured codex "five-second clock tolerance" 0
+fixture agy RESOURCE_EXHAUSTED
+structured agy "recent quota log" 0
+case "$OUT" in *RESOURCE_EXHAUSTED*"Resets in 2 hours"*) ok ;; *) bad "structured agy: returns the log line" ;; esac
+fixture agy RESOURCE_EXHAUSTED 60
+structured agy "old line in a fresh file" 1
+fixture agy RESOURCE_EXHAUSTED 0 60
+structured agy "old file with a fresh line" 1
+fixture agy "unrelated failure"
+structured agy "unrelated line" 1
+structured claude "unsupported agent" 1
+OUT="$(python3 "$HOOKS/limit-reset.py" --structured codex --since invalid 2>"$TMP_HOME/err")"; RC=$?
+expect_code "structured: invalid epoch fails quietly" 1 "$RC"
+[ -z "$OUT" ] && [ ! -s "$TMP_HOME/err" ] && ok || bad "structured: invalid epoch has no traceback"
+rm -rf "$CODEX_HOME" "$AGY_LOG_DIR"
+structured codex "missing session directory" 1
+structured agy "missing log directory" 1
+
+# A failed CLI writes only a session record, with no refusal text on stderr/stdout.
+cat >"$BIN/stub-codex" <<'STUB'
+#!/bin/bash
+python3 - <<'PY'
+import json, os, time
+from datetime import datetime, timezone
+from pathlib import Path
+now = time.time()
+root = Path(os.environ["CODEX_HOME"]) / "sessions" / datetime.fromtimestamp(now).strftime("%Y/%m/%d")
+root.mkdir(parents=True, exist_ok=True)
+event = {"timestamp": datetime.fromtimestamp(now, timezone.utc).isoformat().replace("+00:00", "Z"),
+         "type": "event_msg", "payload": {"type": "task_complete", "error": {
+             "codex_error_info": "usage_limit_exceeded", "message": "resets_at: " + os.environ["STRUCTURED_RESET"]}}}
+(root / "rollout-stub.jsonl").write_text(json.dumps(event) + "\n")
+PY
+exit 1
+STUB
+chmod +x "$BIN/stub-codex"
+SC="$TMP_HOME/structured.conf"
+printf '[runtime]\norder = codex\n[codex]\nbin = stub-codex\nresearch = stub-codex\nping = stub-codex\n' >"$SC"
+export STRUCTURED_RESET=$(( $(date +%s) + 172800 ))
+AGENTS_CONF="$SC" bash "$HOOKS/agent-run.sh" research "$TMP_HOME/p.txt" >"$TMP_HOME/structured-out" 2>"$TMP_HOME/structured-err"; RC=$?
+expect_code "agent-run: structured refusal still exits as failed" 1 "$RC"
+[ "$(cut -f1 "$AGENT_STATE_DIR/unavailable/codex.txt" 2>/dev/null)" = "$STRUCTURED_RESET" ] && ok || bad "agent-run: silent structured refusal records the message's reset time"
+[ ! -s "$TMP_HOME/structured-out" ] && ok || bad "agent-run: failed silent CLI has no work output"
+printf '%s\tlimit\n' "$(( $(date +%s) + 3600 ))" >"$AGENT_STATE_DIR/unavailable/codex.txt"
+AGENTS_CONF="$SC" bash "$HOOKS/limit-check.sh" --force
+[ "$(cut -f1 "$AGENT_STATE_DIR/unavailable/codex.txt" 2>/dev/null)" = "$STRUCTURED_RESET" ] && ok || bad "limit-check: silent structured refusal moves the reset time"
+rm -rf "$CODEX_HOME" "$AGY_LOG_DIR" "$AGENT_STATE_DIR/unavailable" "$AGENT_STATE_DIR/limit-check"
+unset STRUCTURED_RESET
+
 # ---------- status line: installed agents only, every 3rd prompt ----------
 ST="$TMP_HOME/status.conf"
 cat >"$ST" <<'CONFEOF'
@@ -418,10 +512,11 @@ run md-lint.sh "$(pl "$s" Edit "$(jq -cn --arg p "$TMP_HOME/proj/bad.md" '{file_
 
 # ---------- agy: lint findings reach the model through PreInvocation ----------
 ADAPTER="$HOOKS/agy-adapter.sh"
+ADAPTER_TMP="$TMP_HOME/adapter-tmp"; mkdir -p "$ADAPTER_TMP"
 mkdir -p "$TMP_HOME/proj"; printf 'x\n' >"$TMP_HOME/proj/agybad.md"
 conv="agy-$(uuidgen)"
 post="$(jq -cn --arg c "$conv" --arg p "$TMP_HOME/proj/agybad.md" '{conversationId:$c,toolCall:{name:"write_to_file",args:{TargetFile:$p}}}')"
-out="$(TMPDIR=/var/empty MD_LINT_CMD="$LINTER" bash "$ADAPTER" md-lint.sh PostToolUse <<<"$post")"
+out="$(TMPDIR="$ADAPTER_TMP" MD_LINT_CMD="$LINTER" bash "$ADAPTER" md-lint.sh PostToolUse <<<"$post")"
 [ "$out" = "{}" ] && ok || bad "agy adapter: PostToolUse answers {} (got $out)"
 pre="$(jq -cn --arg c "$conv" '{conversationId:$c,invocationNum:2}')"
 out="$(bash "$ADAPTER" pending PreInvocation <<<"$pre")"
@@ -429,7 +524,7 @@ case "$out" in *ephemeralMessage*MD013*) ok ;; *) bad "agy adapter: the parked f
 out="$(bash "$ADAPTER" pending PreInvocation <<<"$pre")"
 [ "$out" = "{}" ] && ok || bad "agy adapter: findings are injected only once (got $out)"
 post_ok="$(jq -cn --arg c "$conv" --arg p "$TMP_HOME/proj/ja.md" '{conversationId:$c,toolCall:{name:"write_to_file",args:{TargetFile:$p}}}')"
-TMPDIR=/var/empty MD_LINT_CMD="$LINTER" bash "$ADAPTER" md-lint.sh PostToolUse <<<"$post_ok" >/dev/null
+TMPDIR="$ADAPTER_TMP" MD_LINT_CMD="$LINTER" bash "$ADAPTER" md-lint.sh PostToolUse <<<"$post_ok" >/dev/null
 [ "$(bash "$ADAPTER" pending PreInvocation <<<"$pre")" = "{}" ] && ok || bad "agy adapter: a clean file parks nothing"
 
 # ---------- agy: research-job guard (fail closed, only inside a job) and the per-turn status line ----------

@@ -32,6 +32,7 @@ for um in "$STATE"/unavailable/*.txt; do
   # one check at a time per agent
   lock="$STATE/limit-check/$a.lock"; mkdir "$lock" 2>/dev/null || { [ -n "$(find "$lock" -mmin +10 2>/dev/null)" ] && rmdir "$lock"; continue; }
   touch "$stamp"
+  since=$(date +%s)
   out="$(AGENT_JOB=1 AGENT_DELEGATED_BY=limit-check AGENT_PROMPT="" python3 - "$ping" <<'PY'
 import subprocess, sys
 try:
@@ -44,7 +45,10 @@ PY
   rmdir "$lock" 2>/dev/null
   rc="$(head -1 <<<"$out")"; text="$(tail -n +2 <<<"$out")"
   label="$(conf get "$a" label)"; label="${label:-$a}"
-  if printf '%s' "$text" | python3 "$HOOK_DIR/limit-reset.py" --is-limit; then
+  signal=""; [ "$rc" = 0 ] || signal="$(python3 "$HOOK_DIR/limit-reset.py" --structured "$a" --since "$since" 2>/dev/null)"
+  structured_limit=0
+  if [ -n "$signal" ]; then text="$signal"; structured_limit=1; fi
+  if [ "$structured_limit" -eq 1 ] || printf '%s' "$text" | python3 "$HOOK_DIR/limit-reset.py" --is-limit; then
     new="$(printf '%s' "$text" | python3 "$HOOK_DIR/limit-reset.py")"
     [ -z "$new" ] || [ "$new" = "$until_epoch" ] || printf '%s\t%s\n' "$new" "使用上限(limit-checkが確認。エラー文の解除時刻まで)" >"$um"
   elif [ "$rc" = 0 ] && [ -n "$(sed -n '1,/^--stderr--$/p' <<<"$text" | grep -v '^--stderr--$' | tr -d '[:space:]')" ]; then

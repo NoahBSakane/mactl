@@ -7,10 +7,16 @@ Understands what the agent CLIs print: an ISO date-time, `Oct 10th, 2026 11:42 A
 Only a moment in the future, at most 14 days away, is believed. Any problem prints nothing: the
 caller falls back to a fixed wait.   `limit-reset.py --now <epoch>` fixes the clock (tests).
 `limit-reset.py --is-limit`: exit 0 when the text reads like a usage/rate-limit refusal (not just a mention of a quota), else 1.
+`--structured <agent> --since <epoch>`: prefer recent Codex session errors / agy log signals;
+print the refusal on success (exit 0), otherwise nothing (exit 1). Text is the fallback;
+Claude / Muse / Grok use text only.
 """
+import json
+import os
 import re
 import sys
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 MONTHS = {m: i + 1 for i, m in enumerate("jan feb mar apr may jun jul aug sep oct nov dec".split())}
 UNIT = {"s": 1, "sec": 1, "second": 1, "m": 60, "min": 60, "minute": 60, "h": 3600, "hr": 3600,
@@ -79,8 +85,68 @@ LIMIT_TEXT = re.compile(
     re.I | re.S)
 
 
+def structured(agent, since):
+    cutoff = since - 5
+    today = datetime.now()
+    if agent == "codex":
+        root = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))) / "sessions"
+        days = {datetime.fromtimestamp(since).strftime("%Y/%m/%d"), today.strftime("%Y/%m/%d")}
+        paths = [p for day in sorted(days) for p in (root / day).glob("rollout-*.jsonl")]
+        signal = "usage_limit_exceeded"
+    elif agent == "agy":
+        root = Path(os.environ.get("AGY_LOG_DIR", str(Path.home() / ".gemini/antigravity-cli/log")))
+        paths = root.glob("*.log")
+        signal = "RESOURCE_EXHAUSTED"
+    else:
+        return None
+    for path in paths:
+        try:
+            if path.stat().st_mtime < cutoff:
+                continue
+            log = path.open(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        with log:
+            for line in log:
+                if signal not in line:
+                    continue
+                if agent == "codex":
+                    try:
+                        event = json.loads(line)
+                    except ValueError:  # a half-written last line
+                        continue
+                    error = event.get("payload", {}).get("error", {})
+                    if error.get("codex_error_info") != signal:
+                        continue
+                    stamp = datetime.fromisoformat(event["timestamp"].replace("Z", "+00:00")).timestamp()
+                    message = error.get("message")
+                    if stamp >= cutoff and isinstance(message, str):
+                        message = " ".join(message.splitlines()).strip()
+                        if message:
+                            return message
+                else:
+                    match = re.match(r"^[IWEF](\d{2})(\d{2}) (\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?\s", line)
+                    if match:
+                        mo, day, h, mi, sec, us = match.groups()
+                        stamp = datetime(today.year, int(mo), int(day), int(h), int(mi), int(sec),
+                                         int((us or "0").ljust(6, "0"))).timestamp()
+                        if stamp >= cutoff:
+                            return line.strip()
+    return None
+
+
 def main():
     args = sys.argv[1:]
+    if args[:1] == ["--structured"]:
+        try:
+            if len(args) == 4 and args[2] == "--since":
+                message = structured(args[1], float(args[3]))
+                if message:
+                    print(message)
+                    return
+        except Exception:  # noqa: BLE001
+            pass
+        sys.exit(1)
     if args[:1] == ["--is-limit"]:
         sys.exit(0 if LIMIT_TEXT.search(sys.stdin.read()[:8000]) else 1)
     now = float(args[1]) if len(args) >= 2 and args[0] == "--now" else datetime.now(timezone.utc).timestamp()
