@@ -6,7 +6,7 @@ Understands what the agent CLIs print: an ISO date-time, `Oct 10th, 2026 11:42 A
 (`in 2 hours 15 minutes`, `retry after 90s`) and a unix epoch (`resets_at: 1791600154`).
 Only a moment in the future, at most 14 days away, is believed. Any problem prints nothing: the
 caller falls back to a fixed wait.   `limit-reset.py --now <epoch>` fixes the clock (tests).
-`limit-reset.py --is-limit`: exit 0 when the text reads like a usage/rate-limit refusal, else 1.
+`limit-reset.py --is-limit`: exit 0 when the text reads like a usage/rate-limit refusal (not just a mention of a quota), else 1.
 """
 import re
 import sys
@@ -68,7 +68,15 @@ def candidates(text, now):
         yield t.timestamp()
 
 
-LIMIT_TEXT = re.compile(r"usage limit|rate limit|quota|hit your .*limit|try again at|resets? (at|in)|too many requests", re.I)
+# the shapes of a refusal, not the words that merely mention a limit (a quota, a rate limit, "resets at")
+LIMIT_TEXT = re.compile(
+    r"hit your .{0,30}limit"                                              # You've hit your usage limit
+    r"|(?:usage|rate|token|request)s? limit (?:has been |was )?(?:reached|exceeded|hit)"
+    r"|exceeded your .{0,30}(?:quota|limit)"
+    r"|quota (?:has been |was )?(?:reached|exhausted)"                      # Individual quota reached
+    r"|RESOURCE_EXHAUSTED"
+    r"|\b429\b.{0,40}too many requests|too many requests.{0,40}\b429\b",
+    re.I | re.S)
 
 
 def main():

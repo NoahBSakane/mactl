@@ -314,6 +314,15 @@ lim() { printf '%s' "$1" | python3 "$HOOKS/limit-reset.py" --now "$NOW" | { read
 [ "$(lim "resets_at: $((NOW + 7200))")" = "2026-10-07 16:00:00" ] && ok || bad "limit-reset: epoch"
 [ "$(lim "nothing useful here")" = none ] && ok || bad "limit-reset: no time in the text"
 [ "$(lim "try again at Jan 2, 2020 1:00 AM")" = none ] && ok || bad "limit-reset: a past moment is not believed"
+isl() { printf '%s' "$1" | python3 "$HOOKS/limit-reset.py" --is-limit; }
+for t in "ledger_daily の集計と月別ブックへの退避を実装しました。Drive のquotaには余裕があります。" "この関数はタイマーが resets at midnight するので" \
+  "retry.ts は rate limit と quota exceeded を再試行し、429 を扱います。" "Try again at your convenience." "Increase the quota in the console"; do
+  isl "$t" && bad "is-limit: ordinary text is not a limit: $t" || ok
+done
+for t in "You've hit your usage limit. Upgrade to Pro, or try again at Oct 10th, 2026 11:42 AM." "Individual quota reached. Resets in 120h11m41s" \
+  "RESOURCE_EXHAUSTED (code 429)" "HTTP 429 Too Many Requests" "Error: usage limit reached"; do
+  isl "$t" && ok || bad "is-limit: a real refusal is a limit: $t"
+done
 [ "$(lim "try again at 2030-01-01 00:00")" = none ] && ok || bad "limit-reset: more than 14 days away is not believed"
 
 # agent-run records the real reset moment (6 hours only when the text names none)
@@ -329,6 +338,11 @@ printf '#!/bin/bash\necho "usage limit reached" >&2; exit 1\n' >"$BIN/stub-c"
 AGENTS_CONF="$RS" bash "$HOOKS/agent-run.sh" research "$TMP_HOME/p.txt" >/dev/null 2>&1
 d=$(( $(cut -f1 "$AGENT_STATE_DIR/unavailable/c.txt" 2>/dev/null || echo 0) - $(date +%s) ))
 [ "$d" -gt 21000 ] && [ "$d" -le 21600 ] && ok || bad "agent-run: 6 hours when no time is named (got ${d}s)"
+# a failed run whose long output merely talks about quotas and rate limits is not a usage limit
+printf '#!/bin/bash\nfor i in $(seq 1 40); do echo "retry.ts handles rate limit and quota exceeded, then try again at the next tick (resets at midnight)"; done; exit 1\n' >"$BIN/stub-c"
+rm -rf "$AGENT_STATE_DIR/unavailable"
+AGENTS_CONF="$RS" bash "$HOOKS/agent-run.sh" research "$TMP_HOME/p.txt" >/dev/null 2>&1
+[ ! -e "$AGENT_STATE_DIR/unavailable/c.txt" ] && ok || bad "agent-run: ordinary output that mentions quotas does not mark the agent unavailable"
 
 # ---------- status line: installed agents only, every 3rd prompt ----------
 ST="$TMP_HOME/status.conf"
