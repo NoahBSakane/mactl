@@ -32,6 +32,7 @@ import pwd
 import re
 import shlex
 import sys
+import time
 import base64
 
 try:
@@ -63,7 +64,7 @@ RESERVED = {"if", "then", "else", "elif", "fi", "while", "until", "do", "done", 
 SEP = {";", "&&", "||", "|", "&", "|&", "(", ")", "\x00NL"}
 SHELLS = {"sh", "bash", "zsh", "dash", "ksh", "fish", "ash", "pwsh", "powershell"}
 RM_LIKE = {"rm", "grm", "gnurm", "srm", "shred", "unlink", "rmdir", "rimraf", "trash", "trash-put", "trash-cli", "del-cli", "remove-item"}
-INTERP = re.compile(r"^(python|ruby|perl|node|php|osascript|lua|deno|bun|nodejs|awk|gawk|tclsh|expect|pwsh|powershell)[0-9.]*$")
+INTERP = re.compile(r"^(python|ruby|perl|node|php|osascript|lua|deno|bun|nodejs|awk|gawk|tclsh|expect|pwsh|powershell|swift|swiftc|jshell|groovy)[0-9.]*$")
 FILTERS = {"grep", "egrep", "fgrep", "rg", "sort", "head", "tail", "sed", "awk", "tr", "uniq", "cut", "xargs", "tee", "while",
            "read", "cat"}
 ASSIGN = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=(.*)$", re.S)
@@ -75,8 +76,12 @@ WRAP_OPTS = {"sudo": set("ugphCDRTUrt"), "doas": set("uC"), "env": set("uSCP"), 
              "npx": set("pc"), "bunx": set(), "pnpx": set(), "dlx": set(), "gtimeout": set(), "timeout": set("sk"),
              "runuser": set("ulg"), "parallel": set("jN"), "launchctl": set()}
 TIMEOUTS = {"timeout", "gtimeout"}
+LONG_VALUED = {"sudo": {"user", "group", "host", "prompt", "chdir", "close-from", "role", "type", "other-user", "command-timeout", "login-class"},
+               "doas": {"user"}, "env": {"chdir", "unset", "block-signal", "default-signal", "ignore-signal"},
+               "nice": {"adjustment"}, "timeout": {"signal", "kill-after"}, "gtimeout": {"signal", "kill-after"},
+               "ionice": {"class", "classdata", "pid"}, "runuser": {"user", "group", "command"}, "flock": {"timeout", "conflict-exit-code"}}
 RUNNERS = {"uv", "poetry", "pipenv", "conda", "pdm", "rye", "hatch"}
-DEL_NAMES = r"(?:rmtree|remove_tree|rm_rf|rm_r|rmSync|rimraf|rmdirSync|unlinkSync|removeItem|trashItem|Remove-Item|rmdir)"
+DEL_NAMES = r"(?:rmtree|remove_tree|rm_rf|rm_r|remove_entry_secure|remove_entry|rmSync|rimraf|rmdirSync|unlinkSync|removeItem|trashItem|Remove-Item|rmdir|rmrf|fs\.promises\.rm|fs\.rm|fsp\.rm|rimrafSync|emptyDirSync|emptyDir|removeSync|(?<=\.)rm(?=\s*\()|(?<=\.)remove(?=\s*\())"
 STR = r"""(?:'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)")"""
 
 
@@ -122,18 +127,40 @@ def is_critical(p):
     return fold(p) in CRITICAL_ALL
 
 
-def brace_expand(s, limit=64):
-    out, work = [], [s]
-    while work and len(out) < limit:
+class TooComplex(Exception):
+    """the command line needs more work to follow than we are willing to do: it is refused, not waved through"""
+
+
+BUDGET = {"calls": 0, "work": 0, "deadline": None}
+MAX_CALLS = 4000     # analyse() / run_command() calls in one command line
+MAX_WORK = 60000     # candidate paths looked at in one command line
+MAX_SECONDS = 3.0
+
+
+def tick(kind="calls", n=1):
+    BUDGET[kind] += n
+    if BUDGET["calls"] > MAX_CALLS or BUDGET["work"] > MAX_WORK:
+        raise TooComplex()
+    if BUDGET["deadline"] is not None and time.monotonic() > BUDGET["deadline"]:
+        raise TooComplex()
+
+
+def brace_expand(s, limit=2048):
+    """every alternative of a brace expression, without duplicates; more than `limit` of them is TooComplex"""
+    seen, work, out = {s}, [s], []
+    while work:
         cur = work.pop()
         m = re.search(r"\{([^{}]*,[^{}]*)\}", cur)
         if not m:
             out.append(cur)
             continue
         for alt in m.group(1).split(","):
-            work.append(cur[:m.start()] + alt + cur[m.end():])
-            if len(work) > 4 * limit:
-                break
+            nxt = cur[:m.start()] + alt + cur[m.end():]
+            if nxt not in seen:
+                seen.add(nxt)
+                work.append(nxt)
+        if len(seen) > limit:
+            raise TooComplex()
     return out or [s]
 
 
@@ -150,11 +177,13 @@ class Ctx:
         self.pending_old = None               # where to fall back to if the `cd` of an && chain failed
         self.subst_bodies = []                # bodies of $(...) that could not be evaluated
         self.psub = {}                        # <(...) markers -> (value or None, body)
+        self.arrays = {}                      # name=(a b c) -> [a, b, c]
 
     def copy(self):
         c = Ctx(self.cwds, self.env, self.links, self.multi, self.funcs, self.aliases)
         c.subst_bodies = list(self.subst_bodies)
         c.psub = dict(self.psub)
+        c.arrays = dict(self.arrays)
         return c
 
     def keep_cwds(self, new):
@@ -231,21 +260,38 @@ def known_value(name, ctx):
 
 
 def expand(tok, ctx, cwd):
-    """~, ~user, ~+, $HOME, ${HOME...}, $USER, $PWD and earlier assignments; unknown ones stay as written"""
+    """~, ~user, ~+, $HOME, ${HOME...}, ${!name}, $USER, $PWD and earlier assignments; unknown ones stay as written"""
     t = tok
-    t = re.sub(r"\$\{HOME[^}]*\}|\$ENV\{HOME\}", HOME, t)
+    if "HOME" not in ctx.env:
+        t = re.sub(r"\$ENV\{HOME\}", HOME, t)
+
+    def indirect(m):
+        v = known_value(m.group(1), ctx)
+        w = known_value(v, ctx) if v and re.fullmatch(r"[A-Za-z_]\w*", v) else None
+        return w if w is not None else m.group(0)
+    t = re.sub(r"\$\{!([A-Za-z_][A-Za-z0-9_]*)\}", indirect, t)
 
     def var(m):
         name = m.group(1) or m.group(3)
+        op = m.group(2) or ""
         if name == "PWD":
             return cwd or m.group(0)
         v = known_value(name, ctx)
+        if op.startswith((":?", "?")):   # aborts the command when empty: never an empty path
+            return v if v else "__SUBST__"
+        if op.startswith((":-", "-", ":=", "=")):
+            word = re.sub(r"^:?[-=]", "", op)
+            return v if v else word
+        if op.startswith((":+", "+")):
+            return re.sub(r"^:?\+", "", op) if v else ""
         if v is None:
             return m.group(0)
-        if m.group(2) and m.group(2).startswith(("%", "#")):
+        if op.startswith(("%", "#")):
             v = v.rstrip("/")
         return v
     t = re.sub(r"\$\{([A-Za-z_][A-Za-z0-9_]*)((?::?[-=+?][^}]*|[%#][^}]*))?\}|\$([A-Za-z_][A-Za-z0-9_]*)", var, t)
+    if "HOME" not in ctx.env:
+        t = re.sub(r"\$\{HOME[^}]*\}", HOME, t)   # ${HOME:0}, ${HOME/x/x} ...: some form of the home
     if t == "~" or t.startswith("~/"):
         t = HOME + t[1:]
     elif (t == "~+" or t.startswith("~+/")) and cwd:
@@ -266,7 +312,9 @@ def variants(tok, ctx):
     for var, vals in ctx.multi.items():
         pat = re.compile(r"\$\{%s\}|\$%s\b" % (var, var))
         if any(pat.search(x) for x in out):
-            out = [pat.sub(lambda m: v, x) for x in out for v in vals][:64]
+            out = [pat.sub(lambda m: v, x) for x in out for v in vals]
+            if len(out) > 4096:
+                raise TooComplex()
     return out
 
 
@@ -381,7 +429,7 @@ def preprocess(text, ctx, cwd, depth, reasons):
 
 
 def scan_script(text):
-    """-> (text without comments and heredoc bodies, [(command line, body, terminated)]).
+    """-> (text without comments and heredoc bodies, [(command line, body, terminated, quoted)]).
     One pass over the lines, keeping the quote state, so an apostrophe in a comment or a `<<` in a string is no trap."""
     out_lines, docs = [], []
     lines = text.split("\n")
@@ -415,21 +463,21 @@ def scan_script(text):
             if c == "#" and (j == 0 or line[j - 1] in " \t;&|(") and not line.startswith("${#", j - 2):
                 break
             if line.startswith("<<<", j):
-                m = re.match(r"<<<\s*(?:'([^']*)'|\"([^\"]*)\"|(\S+))", line[j:])
+                m = re.match(r"<<<\s*(?:'([^']*)'|\"([^\"]*)\"|((?:`[^`]*`|\$\((?:[^()]|\([^()]*\))*\)|[^\s;&|<>()`])+))", line[j:])
                 if m:
-                    docs.append((("".join(buf)), m.group(1) or m.group(2) or m.group(3) or "", True))
+                    docs.append((("".join(buf)), m.group(1) or m.group(2) or m.group(3) or "", True, m.group(1) is not None))
                     j += m.end()
                     continue
             m = re.match(r"<<(-?)\s*(?:'([^']*)'|\"([^\"]*)\"|\\?([^\s;&|<>()'\"]+))", line[j:])
             if m:
-                pending.append((m.group(1) == "-", m.group(2) or m.group(3) or m.group(4)))
+                pending.append((m.group(1) == "-", m.group(2) or m.group(3) or m.group(4), m.group(2) is not None or m.group(3) is not None or "\\" in m.group(0)))
                 j += m.end()
                 continue
             buf.append(c)
             j += 1
         cleaned = "".join(buf)
         out_lines.append(cleaned)
-        for dash, term in pending:
+        for dash, term, quoted_ in pending:
             body, closed = [], False
             while i < len(lines):
                 l = lines[i]
@@ -438,8 +486,49 @@ def scan_script(text):
                     closed = True
                     break
                 body.append(l)
-            docs.append((cleaned, "\n".join(body), closed))
+            docs.append((cleaned, "\n".join(body), closed, quoted_))
     return "\n".join(out_lines), docs
+
+
+ESCAPED = {"(": "\x03", ")": "\x04", ";": "\x05", "&": "\x06", "|": "\x07"}
+UNESCAPED = {v: k for k, v in ESCAPED.items()}
+
+
+def unescape(a):
+    return re.sub("[\x03-\x07]", lambda m: UNESCAPED[m.group(0)], a)
+
+
+def protect_single(text):
+    """a $ inside single quotes becomes \x01, so that it is not taken for a variable"""
+    out, q, i = [], None, 0
+    while i < len(text):
+        c = text[i]
+        if q == "'":
+            out.append("\x01" if c == "$" else c)
+            if c == "'":
+                q = None
+        elif q == '"':
+            if c == "\\" and i + 1 < len(text):
+                out.append(text[i:i + 2])
+                i += 2
+                continue
+            out.append(c)
+            if c == '"':
+                q = None
+        else:
+            if c == "\\" and i + 1 < len(text):
+                out.append(ESCAPED.get(text[i + 1], text[i:i + 2]))
+                i += 2
+                continue
+            if c in "'\"":
+                q = c
+            out.append(c)
+        i += 1
+    return "".join(out)
+
+
+def code_text(s):
+    return s.replace("\x01", "$")
 
 
 def mark_newlines(text):
@@ -484,7 +573,23 @@ def safe_tokens(line):
 REDIR = re.compile(r"^[0-9]*(?:[<>]+[&|]?|&>>?|>&)$")
 
 
-def strip_redirects(argv, reasons=None, targets=None):
+SECRET_FILES = (".ssh/authorized_keys", ".ssh/known_hosts", ".ssh/config", ".gnupg/pubring.kbx", ".gnupg/trustdb.gpg")
+RC_FILES = (".zshrc", ".zprofile", ".zshenv", ".bashrc", ".bash_profile", ".profile", ".gitconfig")
+
+
+def secret_file(path, rc=False):
+    """a key / trust file whose emptying locks the owner out (rc=True: shell start-up files as well)"""
+    q = fold(os.path.normpath(path))
+    for h in {HOME_ENV, HOME_PW}:
+        for rel in SECRET_FILES + (RC_FILES if rc else ()):
+            if q == fold(os.path.join(h, rel)):
+                return True
+        if fnmatch.fnmatchcase(q, fold(os.path.join(h, ".ssh", "id_*"))) and not q.endswith(".pub"):
+            return True
+    return False
+
+
+def strip_redirects(argv, reasons=None, targets=None, ctx=None, cwd=None, writes=None):
     out, i = [], 0
     while i < len(argv):
         t = argv[i]
@@ -493,8 +598,11 @@ def strip_redirects(argv, reasons=None, targets=None):
                 out.pop()
             i += 1
             if i < len(argv):
-                if reasons is not None and re.match(r"^/dev/(r?disk|sd|nvme|hd)", argv[i]) and ">" in t:
-                    reasons.append("ディスク装置(%s)へ直接書き込もうとしています" % argv[i])
+                dest_ = expand(argv[i], ctx, cwd) if ctx is not None else argv[i]
+                if reasons is not None and re.match(r"^/dev/(r?disk|sd|nvme|hd)", dest_) and ">" in t:
+                    reasons.append("ディスク装置(%s)へ直接書き込もうとしています" % dest_)
+                if writes is not None and ">" in t and ">>" not in t and "&" not in t:
+                    writes.append(dest_ if os.path.isabs(dest_) or not cwd else os.path.join(cwd, dest_))
                 if targets is not None and "<" in t:
                     targets.append(argv[i])
                 i += 1
@@ -575,9 +683,14 @@ def unwrap(argv):
             while argv and argv[0].startswith("-") and argv[0] != "--":
                 opt = argv.pop(0)
                 if base == "env" and opt == "-S" and argv:
-                    argv = (safe_tokens(argv.pop(0)) or []) + argv
+                    argv = (safe_tokens(code_text(argv.pop(0))) or []) + argv
                     continue
                 if opt.startswith("--"):
+                    name_, eq, val_ = opt[2:].partition("=")
+                    if base == "env" and name_ == "split-string":
+                        argv = (safe_tokens(code_text(val_ if eq else (argv.pop(0) if argv else ""))) or []) + argv
+                    elif not eq and name_ in LONG_VALUED.get(base, ()) and argv:
+                        argv.pop(0)
                     continue
                 if re.match(r"^-\d+$", opt):
                     continue
@@ -622,11 +735,25 @@ def unwrap(argv):
     return argv, assigns
 
 
+def lockout_mode(mode):
+    """000 / a= / a-rwx / u-r ... : the owner loses read access (go-rwx, which only tightens, is not that)"""
+    if re.fullmatch(r"0?0{3}", mode):
+        return True
+    for clause in mode.split(","):
+        m = re.fullmatch(r"([ugoa]*)([-=])([rwxXst]*)", clause)
+        if m and (m.group(1) == "" or set(m.group(1)) & {"u", "a"}):
+            if m.group(2) == "=" and "r" not in m.group(3):
+                return True
+            if m.group(2) == "-" and set(m.group(3)) & {"r", "x"}:
+                return True
+    return False
+
+
 def wide_glob(name):
     """a glob that matches (nearly) everything in a folder: *, .*, .[a-z]*, ?*  -- not *.dmg"""
     core = re.sub(r"\[[^\]]*\]", "", name)
     core = re.sub(r"[*?]", "", core).strip(".")
-    return len(core) < 2
+    return len(core) < 1
 
 
 def glob_hits_protected(pattern):
@@ -643,6 +770,7 @@ def operand_reason(tok, ctx, *, globs=True):
     for t0 in brace_expand(tok):
         for t1 in variants(t0, ctx):
             for cwd in ctx.cwds:
+                tick("work")
                 t = expand(t1, ctx, cwd)
                 if re.match(r"^\$\{[A-Za-z_][^}]*\}(/+(\.?\*)?)?$|^\$[A-Za-z_][A-Za-z0-9_]*(/+(\.?\*)?)?$", t) and ("*" in t or t.endswith("/")):
                     return "展開される変数だけの `%s` を対象にしています(変数が空だと、ルート直下全体になります。`${VAR:?}` を使うと安全です)" % tok
@@ -681,8 +809,11 @@ def literal_path_reason(expr, ctx):
     e = expr.strip()
     e = re.sub(r"os\.path\.join\(\s*(.*?)\s*,\s*(" + STR + r")\s*\)", lambda m: "%s/%s" % (m.group(1), m.group(3) or m.group(4)), e)
     e = re.sub(r"os\.path\.expanduser\(\s*(" + STR + r")\s*\)", lambda m: m.group(2) or m.group(3), e)
-    e = re.sub(r"(?:Path\.home\(\)|os\.homedir\(\)|os\.environ\[['\"]HOME['\"]\]|ENV\[['\"]HOME['\"]\]|\$ENV\{HOME\}|Dir\.home|"
-               r"NSHomeDirectory\(\)|__import__\(['\"]os['\"]\)\.path\.expanduser\(['\"]~['\"]\))", "~", e)
+    e = re.sub(r"^\s*[A-Za-z_]\w*\s*:\s*", "", e)  # a labelled argument (Swift: atPath: ...)
+    e = re.sub(r"(?:Path\.home\(\)|(?:require\(['\"](?:node:)?os['\"]\)\.|\bos\.)homedir\(\)|os\.environ(?:\[['\"]HOME['\"]\]|\.get\(['\"]HOME['\"][^)]*\))|os\.getenv\(['\"]HOME['\"][^)]*\)|"
+               r"ENV\[['\"]HOME['\"]\]|ENV\.fetch\(['\"]HOME['\"][^)]*\)|\$ENV\{['\"]?HOME['\"]?\}|\$ENV\{HOME\}|Dir\.home(?:\([^)]*\))?|process\.env\.HOME|process\.env\[['\"]HOME['\"]\]|"
+               r"Deno\.env\.get\(['\"]HOME['\"]\)|NSHomeDirectory\(\)|FileManager\.default\.homeDirectoryForCurrentUser(?:\.path)?|System\.getProperty\(['\"]user\.home['\"]\)|"
+               r"__import__\(['\"]os['\"]\)\.path\.expanduser\(['\"]~['\"]\))", "~", e)
     lits = re.findall(STR, e)
     cand = [a or b for a, b in lits] or [e.strip("'\" ")]
     for c in cand:
@@ -701,8 +832,15 @@ def literal_path_reason(expr, ctx):
 def interp_reasons(src, ctx, depth):
     """removal calls and shell strings inside an interpreter one-liner or script"""
     reasons = []
+    # `h = os.environ['HOME']` ... `rmtree(h)`: a plain variable that holds a path stands for it
+    assigned = {}
+    for m in re.finditer(r"(?:^|[;\n{]\s*)(?:(?:const|let|var|my|local)\s+)?\$?([A-Za-z_]\w*)\s*=\s*([^=;\n][^;\n]*)", src):
+        assigned[m.group(1)] = m.group(2).strip().rstrip(";")
+    for name_, val_ in assigned.items():
+        if re.fullmatch(r"[A-Za-z_]\w*", name_) and name_ not in ("ENV", "os") and len(val_) < 300:
+            src = re.sub(r"(?<![\w.'\"])" + re.escape(name_) + r"(?![\w'\"(])(?=\s*[),])", lambda m, v=val_: v, src)
     # shell strings handed to system()/exec()/subprocess: run them through the shell analysis
-    for m in re.finditer(r"(?:system|popen|execSync|exec|spawnSync|check_call|check_output|run|call|Popen|backticks|do shell script)"
+    for m in re.finditer(r"(?:system|popen|execute|execSync|exec|spawnSync|check_call|check_output|run|call|Popen|backticks|do shell script)"
                          r"\s*\(?\s*" + STR, src):
         cmd = m.group(1) or m.group(2)
         if cmd and re.match(r"^\s*(sudo\s+)?(rm|find|dd|diskutil|mv|chmod|chown|rsync|git|truncate|cp|mkfs|newfs|shred|trash|tar|zip|sh|bash)\b", cmd):
@@ -719,7 +857,7 @@ def interp_reasons(src, ctx, depth):
             items.append(part.strip().strip("'\"") if not r else "~")
         reasons += analyse(m.group(1) + " " + " ".join(shlex.quote(i) if i != "~" else "~" for i in items), ctx.copy(), depth + 1)
     # direct removal calls: rmtree(path), shutil.rmtree(path), fs.rmSync(path), FileUtils.rm_rf(path) ...
-    for m in re.finditer(DEL_NAMES + r"\s*\(?\s*((?:[^(),]|\([^()]*(?:\([^()]*\)[^()]*)*\))+)", src):
+    for m in re.finditer(r"(?<![=\w])" + DEL_NAMES + r"\s*\(?\s*((?:[^(),]|\([^()]*(?:\([^()]*\)[^()]*)*\))+)", src):
         r = literal_path_reason(m.group(1), ctx)
         if r:
             reasons.append("ワンライナー(スクリプト)が、保護された場所を消す恐れがあります: " + r)
@@ -730,20 +868,26 @@ def interp_reasons(src, ctx, depth):
 
 def analyse(text, ctx, depth=0):
     reasons = []
+    tick()
     if depth > 5:
         return ["入れ子が深すぎて解析できません(eval や bash -c の連鎖)。実行内容を確認できないので拒否します"]
     if not text.strip():
         return reasons
     big = len(text) > 400000
     if big:
-        reasons += fallback(text)
+        reasons += fallback(text)   # looks at all of it; the careful analysis below sees only the two ends
     cwd0 = ctx.cwds[0] if ctx.cwds else None
     text = text.replace("\\\r\n", "").replace("\\\n", "")
     text = decode_ansi_c(text)
-    text = re.sub(r"\$\(\([^()]*(?:\([^()]*\)[^()]*)*\)\)", "0", text)  # arithmetic: its << is no heredoc
+    def arith(m):  # arithmetic: its << is no heredoc, but a command substitution inside it does run
+        for _s, _e, body in substitutions(m.group(0)[3:-2]):
+            reasons.extend(analyse(body, ctx.copy(), depth + 1))
+        return "0"
+    text = re.sub(r"\$\(\([^()]*(?:\([^()]*\)[^()]*)*\)\)", arith, text)
     text = re.sub(r"(?<![\w'\"(\[,=])(['\"])~(/[^'\"]*)?\1(?![\w'\")\],])", lambda m: "__QT__" + (m.group(2) or ""), text)  # a quoted ~ word is a name, not the home
     text, docs = scan_script(text if not big else text[:200000] + "\n" + text[-200000:])
-    for cmdline, body, closed in docs:
+    text = protect_single(text)
+    for cmdline, body, closed, quoted in docs:
         spec = re.sub(r"<<-?\s*(?:'[^']*'|\"[^\"]*\"|\\?[^\s;&|<>()'\"]+)", " ", cmdline)
         names = []
         for seg in re.split(r"\|", spec):
@@ -757,6 +901,18 @@ def analyse(text, ctx, depth=0):
         runs_as_code = any(n in SHELLS | {"eval", "source", "."} for n in names) or not closed
         if runs_as_code:
             reasons += analyse(body, ctx.copy(), depth + 1)
+            continue
+        if not quoted:  # the shell expands $(...) and `...` in the text before the command sees it
+            body = preprocess(body, ctx, cwd0, depth, reasons)
+        if names and names[0] == "read":
+            words = [a for a in first_args if not a.startswith("-")]
+            line = body.splitlines()[0] if body else ""
+            if words and "__SUBST__" not in line:
+                parts = line.split(None, len(words) - 1) if len(words) > 1 else [line.strip()]
+                for k_, w_ in enumerate(words):
+                    ctx.env[w_] = expand(parts[k_], ctx, cwd0) if k_ < len(parts) else ""
+            elif words:
+                ctx.env.pop(words[0], None)
         elif names and INTERP.match(names[0]):
             reasons += interp_reasons(body, ctx, depth)
         elif names and names[0] == "xargs" and re.search(r"\b(rm|unlink|shred|rimraf)\b", " ".join(first_args)):
@@ -771,6 +927,21 @@ def analyse(text, ctx, depth=0):
     for m in re.finditer(r"(?:^|[;\n&|]\s*)alias\s+([\w-]+)=(?:'([^']*)'|\"([^\"]*)\"|(\S+))", text):
         ctx.aliases[m.group(1)] = m.group(2) or m.group(3) or m.group(4) or ""
     text = preprocess(text, ctx, cwd0, depth, reasons)
+    # arrays: name=(a b c) ... "${name[@]}" / ${name[1]}
+    for m in re.finditer(r"(?<![\w$])([A-Za-z_]\w*)(\+?)=\(([^()]*)\)", text):
+        vals = safe_tokens(m.group(3)) or []
+        ctx.arrays[m.group(1)] = (ctx.arrays.get(m.group(1), []) if m.group(2) else []) + vals
+    if ctx.arrays:
+        text = re.sub(r"(?<![\w$])([A-Za-z_]\w*)\+?=\(([^()]*)\)", lambda m: m.group(1) + "=__ARR__", text)
+
+        def arr(m):
+            vals = ctx.arrays.get(m.group(1))
+            if vals is None:
+                return m.group(0)
+            if m.group(2) in ("@", "*"):
+                return " ".join(shlex.quote(v) if re.search(r"[\s'\"]", v) else v for v in vals)
+            return vals[int(m.group(2))] if int(m.group(2)) < len(vals) else ""
+        text = re.sub(r"\"?\$\{([A-Za-z_]\w*)\[(@|\*|\d+)\]\}\"?", arr, text)
     toks = safe_tokens(mark_newlines(text))
     if toks is None:
         return reasons + fallback(text)
@@ -802,6 +973,7 @@ def analyse(text, ctx, depth=0):
                 saved = stack.pop()
                 ctx.cwds, ctx.env, ctx.links, ctx.multi = saved.cwds, saved.env, saved.links, saved.multi
             continue
+        head = argv[0] if argv else ""
         if argv:
             r, pipe_src, pipe_lit = run_command(argv, tok, sep_prev, ctx, depth, pipe_src, pipe_lit)
             reasons += r
@@ -814,7 +986,7 @@ def analyse(text, ctx, depth=0):
             ctx.pending_old = None
         if tok != "|" and tok != "|&":
             pipe_lit = None
-        if tok in ("&&", "||", "\x00NL"):
+        if tok in ("&&", "||", "\x00NL", "&") or tok == ";" and head not in ("while", "until", "read", "do", "then", "{", "if"):
             pipe_src = None
         sep_prev = tok
     return reasons
@@ -825,15 +997,20 @@ def fallback(text):
     if re.search(r"\b(rm|rmdir|unlink|shred|srm|rimraf|trash)\b", text) and \
             re.search(r"(?:^|[\s\"'=(])(?:~|\$HOME|\$\{HOME\}|/Users|/)(?:/?\*|/)?(?:$|[\s\"';&|)])|\s(?:\.|\*)(?:$|\s|;|&|\|)", text):
         return ["コマンドを解析し切れませんでしたが、ホームやルートを対象にした削除のように見えます"]
+    if re.search(r"\bof=/dev/(?:r?disk|sd|nvme|hd)|\b(?:mkfs|newfs)\w*\s|\bdiskutil\s+(?:erase|reformat|partition|secureErase|zero|random|apfs\s+(?:delete|erase)|resetFusion)|"
+                 r"\bchmod\s+(?:-\w+\s+)*(?:0{3,4}|[ugoa]*[-=][rwx]*)\s+(?:/|~|\$HOME|\$\{HOME\})(?:\s|$|\*)|\basr\s+restore\b", text):
+        return ["コマンドを解析し切れませんでしたが、ディスクやホーム・ルートの権限を壊す操作のように見えます"]
     return []
 
 
 def run_command(argv, sep, sep_prev, ctx, depth, pipe_src, pipe_lit):
     reasons = []
-    in_targets = []
-    argv = strip_redirects(argv, reasons, in_targets)
-    argv, assigns = unwrap(argv)
+    in_targets, writes = [], []
+    tick()
     cwd = ctx.cwds[0] if ctx.cwds else None
+    argv = [unescape(a) for a in argv]
+    argv = strip_redirects(argv, reasons, in_targets, ctx, cwd, writes)
+    argv, assigns = unwrap(argv)
     for a in assigns:
         k, v = ASSIGN.match(a).groups()
         val = expand(v.strip("'\""), ctx, cwd)
@@ -841,6 +1018,10 @@ def run_command(argv, sep, sep_prev, ctx, depth, pipe_src, pipe_lit):
             ctx.env.pop(k, None)
         else:
             ctx.env[k] = val
+    trunc = not argv or argv[0] in (":", "true")  # `> file` / `: > file` only empties the file
+    for w in writes:
+        if secret_file(w, rc=trunc):
+            reasons.append("リダイレクトで、鍵や設定のファイル(%s)を空にしようとしています" % w)
     if not argv:
         return reasons, pipe_src, pipe_lit
     raw = argv[0]
@@ -849,7 +1030,10 @@ def run_command(argv, sep, sep_prev, ctx, depth, pipe_src, pipe_lit):
         k = argv.index("in")
         var = argv[1] if k >= 2 else None
         if var:
-            ctx.multi[var] = [expand(a, ctx, cwd) for a in argv[k + 1:]][:64] or ["__EMPTY__"]
+            vals = [b for a in argv[k + 1:] for b in brace_expand(expand(a, ctx, cwd))]
+            if len(vals) > 4096:
+                raise TooComplex()
+            ctx.multi[var] = vals or ["__EMPTY__"]
         return reasons, pipe_src, None
     if raw in ("for", "select"):
         return reasons, pipe_src, None
@@ -860,16 +1044,10 @@ def run_command(argv, sep, sep_prev, ctx, depth, pipe_src, pipe_lit):
             toks = safe_tokens(val) or []
             return run_command(toks + argv[1:], sep, sep_prev, ctx, depth, pipe_src, pipe_lit)
     if raw in ctx.aliases:
-        toks = safe_tokens(ctx.aliases[raw]) or []
+        toks = safe_tokens(code_text(ctx.aliases[raw])) or []
         return run_command(toks + argv[1:], sep, sep_prev, ctx, depth, pipe_src, pipe_lit)
     if raw in ctx.funcs and depth < 4:
-        body = ctx.funcs[raw]
-        args_ = argv[1:]
-        for n in range(1, 10):
-            val = args_[n - 1] if n - 1 < len(args_) else ""
-            body = re.sub(r"\$\{%d\}|\$%d\b" % (n, n), lambda m, v=val: shlex.quote(v) if re.search(r"\s", v) else v, body)
-        body = re.sub(r"\$\{@\}|\$@|\$\*|\"\$@\"|\"\$\*\"", " ".join(args_), body)
-        return analyse(body, ctx.copy(), depth + 1), pipe_src, None
+        return analyse(bind_params(ctx.funcs[raw], argv[1:]), ctx.copy(), depth + 1), pipe_src, None
     name = os.path.basename(raw).lower()
     args = argv[1:]
     short, long_ = flags_of(args)
@@ -892,6 +1070,10 @@ def run_command(argv, sep, sep_prev, ctx, depth, pipe_src, pipe_lit):
         return reasons, pipe_src, None
     if name == "ln" and ("s" in short or "symbolic" in long_):
         ops = operands(args)
+        if len(ops) >= 2 and ("f" in short or "force" in long_) and ops[0] == "/dev/null":
+            b_ = norm(expand(ops[1], ctx, cwd), cwd, ctx)
+            if b_ and secret_file(b_, rc=True):
+                reasons.append("ln -sf /dev/null で、鍵や設定のファイル(%s)を潰そうとしています" % b_)
         if len(ops) >= 2:
             a = norm(expand(ops[0], ctx, cwd), cwd, ctx)
             b = norm(expand(ops[1], ctx, cwd), cwd, ctx)
@@ -904,10 +1086,11 @@ def run_command(argv, sep, sep_prev, ctx, depth, pipe_src, pipe_lit):
     # shells and eval: the string they are given is code
     if name in SHELLS or name in ("eval", "source", "."):
         if name in ("eval", "source", "."):
+            args = [a for i_, a in enumerate(args) if not (a == "--" and i_ == 0)]
             for a in args:
                 if a in ctx.psub and ctx.psub[a][0]:
                     reasons += analyse(ctx.psub[a][0], ctx.copy(), depth + 1)
-            code = " ".join(expand(a, ctx, cwd) for a in args if a not in ctx.psub).replace("__SUBST__", "")
+            code = code_text(" ".join(expand(a, ctx, cwd) for a in args if a not in ctx.psub)).replace("__SUBST__", "")
             if "__SUBST__" in " ".join(args) and any(re.search(r"base64|xxd|openssl", b) for b in ctx.subst_bodies):
                 reasons.append("デコードした内容を eval で実行しようとしています")
             reasons += analyse(code, ctx.copy(), depth + 1)
@@ -916,16 +1099,17 @@ def run_command(argv, sep, sep_prev, ctx, depth, pipe_src, pipe_lit):
                 if a.startswith("-") and not a.startswith("--") and "c" in a[1:]:
                     rest = [x for x in args[i + 1:] if x != "--"]
                     if rest:
-                        code = expand(rest[0], ctx, cwd)
+                        code = code_text(expand(rest[0], ctx, cwd))
                         if "__SUBST__" in rest[0] and any(re.search(r"base64|xxd|openssl", b) for b in ctx.subst_bodies):
                             reasons.append("デコードした内容を sh -c で実行しようとしています")
-                        reasons += analyse(code.replace("__SUBST__", ""), ctx.copy(), depth + 1)
+                        code = bind_params(code.replace("__SUBST__", ""), [expand(x, ctx, cwd) for x in rest[1:]], zero=True)
+                        reasons += analyse(code, ctx.copy(), depth + 1)
                     break
             else:
                 if in_pipe_after and pipe_lit == "__DECODED__":
                     reasons.append("デコード(base64 など)した内容を、そのままシェルで実行しようとしています")
                 elif in_pipe_after and pipe_lit:
-                    reasons += analyse(pipe_lit, ctx.copy(), depth + 1)
+                    reasons += analyse(code_text(pipe_lit), ctx.copy(), depth + 1)
         return reasons, None, None
     if name in ("echo", "printf"):
         lit = literal_of(" ".join(shlex.quote(a) for a in argv))
@@ -1012,16 +1196,25 @@ def run_command(argv, sep, sep_prev, ctx, depth, pipe_src, pipe_lit):
     if name in ("chmod", "chown", "chgrp", "chflags"):
         recursive = bool(short & {"R", "r"}) or "recursive" in long_
         ops = operands(args)
+        mode = ops[0] if ops else ""
+        locks = name == "chmod" and lockout_mode(mode)
         for o in ops[1:]:
+            if locks:   # a mode that takes the owner's own access away: anywhere protected, a glob included
+                r = operand_reason(o, ctx, globs=True)
+                if r:
+                    reasons.append("chmod %s で、保護された場所の権限を奪おうとしています: %s" % (mode, r))
+                    continue
             for t0 in brace_expand(o):
                 for c in ctx.cwds:
                     t = expand(t0, ctx, c)
                     p = norm(t, c, ctx) if not GLOB.search(t) else None
-                    if p and is_critical(p) and (recursive or name == "chmod" and re.search(r"^0{3,4}$|^[ugoa]*-[rwx]+", ops[0] if ops else "")):
+                    if p and is_critical(p) and (recursive or locks):
                         reasons.append("%s で、ホーム・ルート・システムの場所(%s)の権限を変えようとしています" % (name, p))
         return reasons, None, None
     if name == "rsync":
         ops = operands(args, valued={"--exclude", "--include", "-e", "--exclude-from", "--include-from", "--filter", "-f", "--rsh", "--files-from"})
+        if "n" in short or "dry-run" in long_:
+            return reasons, None, None
         if any(a.startswith(("--delete", "--del")) for a in args) and ops:
             r = operand_reason(ops[-1], ctx, globs=False)
             if r:
@@ -1050,19 +1243,34 @@ def run_command(argv, sep, sep_prev, ctx, depth, pipe_src, pipe_lit):
         return check_git(args, ctx, reasons)
     if name == "dd":
         for a in args:
-            if re.match(r"^of=/dev/(r?disk|sd|nvme|hd)", a):
-                reasons.append("dd でディスク装置(%s)へ書き込もうとしています" % a[3:])
+            if a.startswith("of="):
+                dest_ = expand(a[3:], ctx, cwd)
+                if re.match(r"^/dev/(r?disk|sd|nvme|hd)", dest_):
+                    reasons.append("dd でディスク装置(%s)へ書き込もうとしています" % dest_)
+                elif secret_file(dest_, rc=True):
+                    reasons.append("dd で、鍵や設定のファイル(%s)を潰そうとしています" % dest_)
         return reasons, None, None
     if name == "diskutil":
         sub = (args[0] if args else "").lower()
-        if sub.startswith(("erase", "reformat", "partition", "secureerase", "zero", "random")) or \
+        if sub.startswith(("erase", "reformat", "partition", "secureerase", "zero", "random", "resetfusion")) or \
+                (sub in ("corestorage", "cs") and len(args) > 1 and re.match(r"(?i)^(delete|revert)", args[1])) or \
                 (sub == "apfs" and len(args) > 1 and re.match(r"(?i)^(delete|erase)", args[1])):
             reasons.append("diskutil でディスクやボリュームを消去しようとしています")
         return reasons, None, None
+    if name == "asr" and (args[:1] == ["restore"] or "restore" in args) and any(re.match(r"^/dev/(r?disk|sd|nvme)", x) for x in args):
+        return ["asr でディスク装置を上書きしようとしています"], None, None
+    if name == "crontab" and "-r" in args:
+        return ["crontab -r で、定期実行の設定を全部消そうとしています"], None, None
+    if name == "tmutil" and args[:1] and args[0].lower() in ("delete", "deletelocalsnapshots"):
+        return ["tmutil で、バックアップやスナップショットを消そうとしています"], None, None
+    if name == "defaults" and args[:1] == ["delete"] and len(args) > 1 and args[1] in ("NSGlobalDomain", "-g", "-globalDomain", "Apple Global Domain"):
+        return ["defaults delete で、システム全体の設定(グローバルドメイン)を消そうとしています"], None, None
+    if name == "kill" and len(args) >= 2 and args[-1] == "-1":
+        return ["kill ... -1 は、自分の全プロセスに信号を送ります"], None, None
     if name.startswith(("mkfs", "newfs")):
         return ["%s でファイルシステムを作り直そうとしています" % name], None, None
     if INTERP.match(name):
-        reasons += interp_reasons(" ".join(args), ctx, depth)
+        reasons += interp_reasons(code_text(" ".join(args)), ctx, depth)
         return reasons, None, None
     if name.startswith("$") or name.startswith("`") or name == "__subst__":
         for o in operands(args):
@@ -1082,6 +1290,17 @@ def run_command(argv, sep, sep_prev, ctx, depth, pipe_src, pipe_lit):
     elif name in FILTERS:
         new_src = pipe_src
     return reasons, new_src, (pipe_lit if name == "cat" else None)
+
+
+def bind_params(body, args_, zero=False):
+    """fill $1.. (and $0 for `sh -c code name args`) and $@ / $* into a function body or a -c string"""
+    if zero:
+        body = re.sub(r"\$\{0\}|\$0\b", lambda m: args_[0] if args_ else "sh", body)
+        args_ = args_[1:]
+    for n in range(1, 10):
+        val = args_[n - 1] if n - 1 < len(args_) else ""
+        body = re.sub(r"\$\{%d\}|\$%d\b" % (n, n), lambda m, v=val: shlex.quote(v) if re.search(r"\s", v) else v, body)
+    return re.sub(r"\$\{@\}|\$@|\$\*|\"\$@\"|\"\$\*\"", lambda m: " ".join(args_), body)
 
 
 def _shell_c_code(cmd):
@@ -1111,16 +1330,29 @@ def check_find(name, args, ctx, depth, reasons):
             break
     if not hit and cwd_reason(ctx) and any(x in (".", "./", "*") for x in roots):
         hit = "`%s` は、保護された場所(%s)です" % (roots[0], cwd_reason(ctx))
-    narrow = False
-    for i2, a in enumerate(args):
-        negated = i2 > 0 and args[i2 - 1] in ("!", "-not")
-        nxt = args[i2 + 1] if i2 + 1 < len(args) else ""
-        if a in ("-name", "-iname", "-path", "-ipath", "-regex", "-iregex") and not negated and not wide_glob(nxt.replace(".*", "*")):
-            narrow = True
-        if a in ("-newer", "-lname", "-inum", "-empty") and not negated:
-            narrow = True
-        if a in ("-e", "--extension", "-g", "--glob"):
-            narrow = True
+    runner = ("-exec", "-execdir", "-ok", "-okdir", "-x", "--exec", "-X", "--exec-batch")
+
+    def narrows(part):
+        for i2, a in enumerate(part):
+            negated = i2 > 0 and part[i2 - 1] in ("!", "-not")
+            nxt = part[i2 + 1] if i2 + 1 < len(part) else ""
+            if a in ("-name", "-iname", "-path", "-ipath", "-regex", "-iregex") and not negated and not wide_glob(nxt.replace(".*", "*")):
+                return True
+            if a in ("-newer", "-lname", "-inum", "-empty") and not negated:
+                return True
+            if a in ("-e", "--extension", "-g", "--glob"):
+                return True
+        return False
+    branches, cur = [], []
+    for a in args:
+        if a in ("-o", "-or"):
+            branches.append(cur)
+            cur = []
+        else:
+            cur.append(a)
+    branches.append(cur)
+    # a branch that deletes (or runs something) has to carry its own narrowing, whatever the other branches say
+    narrow = all(narrows(br) for br in branches if "-delete" in br or any(x in runner for x in br)) and any(narrows(br) for br in branches)
     runner = ("-exec", "-execdir", "-ok", "-okdir", "-x", "--exec", "-X", "--exec-batch")
     deletes = "-delete" in args
     for i2, a in enumerate(args):
@@ -1135,7 +1367,8 @@ def check_find(name, args, ctx, depth, reasons):
                 r_inner, _s, _l = run_command(inner, ";", "", ctx.copy(), depth + 1, None, None)
                 reasons += r_inner
                 c0 = os.path.basename(inner[0]).lower()
-                if c0 in RM_LIKE | {"mv", "truncate"}:
+                if c0 in RM_LIKE | {"mv", "truncate"} or c0 == "cp" and "/dev/null" in inner or c0 == "dd" and any(x.startswith("of=") for x in inner) \
+                        or c0 == "chmod" and any(lockout_mode(x) for x in inner[1:2]):
                     deletes = True
                 elif c0 in SHELLS and re.search(r"\b(rm|unlink|shred|rimraf|mv|truncate)\b", " ".join(inner[1:])):
                     deletes = True
@@ -1170,6 +1403,8 @@ def check_git(args, ctx, reasons):
             dirs.append(norm(expand(d, ctx, c), c, ctx))
     if not dirs:
         dirs = [c for c in ctx.cwds if c]
+    if sub == "clean" and (set("".join(a[1:] for a in rest[1:] if a.startswith("-") and not a.startswith("--"))) & {"n"} or "--dry-run" in rest):
+        return reasons, None, None
     wipes = sub == "clean" or sub == "reset" and "--hard" in rest or sub == "checkout" and ("-f" in rest or "--force" in rest or "--" in rest and rest[-1] == ".") or sub == "stash" and "-u" in rest
     if wipes:
         for d in dirs:
@@ -1197,13 +1432,14 @@ def main():
     except Exception:  # noqa: BLE001
         return
     seen = []
+    BUDGET["deadline"] = time.monotonic() + MAX_SECONDS
     try:
         base = os.path.realpath(cwd) if cwd else None
         for r in analyse(text, Ctx([base])):
             if r not in seen:
                 seen.append(r)
-    except RecursionError:
-        seen = ["入れ子が深すぎて解析できません。実行内容を確認できないので拒否します"]
+    except (RecursionError, TooComplex):
+        seen = ["入れ子や繰り返しが多すぎて解析し切れません。実行内容を確認できないので拒否します"]
     except Exception:  # noqa: BLE001
         try:
             seen = fallback(text)
