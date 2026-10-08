@@ -4,7 +4,7 @@ Mac のセットアップ・保守・掃除を `mactl` にまとめたリポジ�
 
 ## 新しいMacでの手順
 
-前提は macOS、Git、GNU Make（Homebrew の `make`）、導入・zsh有効化済みの mise、jq、python3（3.8以上）。`mactl doctor` で確認できる。setup は既存インストーラによる設定の復元で、Homebrew・mise 本体を導入するものではない。mise の有効化行は [mise-uv-config の説明](setup/mise-uv-config/mise-uv-config.md) を参照。
+前提は macOS、Git、GNU Make（Homebrew の `make`）、導入・zsh有効化済みの mise、jq、python3（3.8以上）。`mactl doctor` で確認できる。`brew install make` のあと、PATH を変える必要はない(`mactl` は `/opt/homebrew/opt/make/libexec/gnubin/make` を直接探し、無ければ PATH の `gmake` を使う)。素の `make` コマンドを GNU Make にしたいときだけ、`brew install make` の案内どおり `gnubin` を PATH の先頭に足す。setup は既存インストーラによる設定の復元で、Homebrew・mise 本体を導入するものではない。mise の有効化行は [mise-uv-config の説明](setup/mise-uv-config/mise-uv-config.md) を参照。
 
 ```sh
 git clone https://github.com/NoahBSakane/mactl.git
