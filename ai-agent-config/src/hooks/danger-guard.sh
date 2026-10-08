@@ -9,7 +9,9 @@
 hook_read_payload
 cmd="$(tool_command)"
 [ -n "$cmd" ] || exit 0
-reasons="$(printf '%s' "$cmd" | python3 "$HOOK_DIR/danger_check.py" --cwd "$(jget .cwd)" 2>/dev/null || true)"
+# where the command runs: its own working directory if the tool names one (Codex: workdir), else the session's, else ours
+cwd="$(jq -r '(.tool_input.workdir // .tool_input.cwd // .tool_input.Cwd // .tool_input.working_directory // .cwd // empty)' <<<"$PAYLOAD" 2>/dev/null || true)"
+reasons="$(printf '%s' "$cmd" | python3 "$HOOK_DIR/danger_check.py" --cwd "${cwd:-$PWD}" 2>/dev/null || true)"
 [ -n "$reasons" ] || exit 0
 deny "【破壊的な削除の拒否】ホーム・ルート・システムのディレクトリ、または Documents などの個人フォルダ全体を、消す・壊す恐れのあるコマンドです。
 $reasons
