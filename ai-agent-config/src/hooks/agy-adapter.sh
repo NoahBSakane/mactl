@@ -75,7 +75,7 @@ reason="$(cat "$err")"; rm -f "$err"
 case "$event" in
   PreToolUse)
     if [ "$code" -eq 2 ]; then
-      kind=ask; { [ "$script" = "secret-scan.sh" ] || [ "$script" = "agy-job-guard.sh" ] || [[ "$reason" == 【指示ファイルの直接編集* ]]; } && kind=deny
+      kind=ask; { [ "$script" = "secret-scan.sh" ] || [ "$script" = "agy-job-guard.sh" ] || [ "$script" = "danger-guard.sh" ] || [[ "$reason" == 【指示ファイルの直接編集* ]]; } && kind=deny
       jq -cn --arg k "$kind" --arg r "$reason" '{decision:$k,reason:$r}'
     else echo '{"decision":"allow"}'; fi ;;
   Stop)

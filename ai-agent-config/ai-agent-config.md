@@ -81,6 +81,7 @@ ai-agent-config/tests/install-test.sh              # install/diff/rollbackの一
 | スクリプト | 役割 |
 | --- | --- |
 | `gate.sh`(PreToolUse) | 編集・外部CLI実行・サブエージェント/Workflow起動の前に、エージェント構成の提示を求める。サブエージェント内(`agent_id`)、委譲先(`AGENT_DELEGATED_BY`)、お風呂モード中は通す。クラスごとに、同じプロンプト内の再試行は拒否を続け、AskUserQuestionの実行かユーザーの次のプロンプトで解除する。スクラッチ・tmp・`~/.agent-state`・memoryへの書き込みと、`--help`・`models` 等の読み取り系は対象外。**配備された指示ファイル(`~/AGENTS.md`、`~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md` など。symlinkは解決して判定)の編集は、サブエージェント内・委譲先・お風呂モード中でも常に拒否し、`propose-rule` へ誘導する**(Bashでのリダイレクトによる書き換えは対象外) |
+| `danger-guard.sh` / `danger_check.py`(PreToolUse) | **ホーム・ルート・システムのディレクトリや、Documents などの個人フォルダ全体を消す・壊すコマンドを拒否する**(`rm -rf ~`・`rm -rf /*`・`rm -rf $VAR/*`・`find ~ -delete`・`mv ~`・`chmod -R ~`・`git clean`(ホームで)・`dd of=/dev/disk*`・`diskutil erase*`・`rsync --delete` でホームへ、ほか)。`bash -c`・`eval`・ヒアドキュメント・`$(...)`・代入した変数・`cd ~` のあとの相対パス・波括弧・`sudo`/`env` などの包みを解いて判定する。サブエージェント・委譲先・お風呂モードでも**解除されない**。名前のわからない道具でも、入力に実行するコマンドの文字列があれば検査する(Grok など)。範囲を狭めた削除(`rm -rf ~/project/build`)は通る。保護する場所は `~/.config/ai-agent-config/danger-paths.txt`(1行1パス)で足せる。**限界(最善の努力)**: 削除をスクリプトファイルの中でするもの(`bash clean.sh`)、シェルの別名・関数、実行時に作られるコマンド名は見えない。内部エラーのときは通す(他のhookと同じ) |
 | `secret-scan.sh`(PreToolUse) | 外部CLIへ渡すコマンド・プロンプトに秘密情報(鍵・トークン等)があれば拒否 |
 | `mark-asked.sh`(PostToolUse) | AskUserQuestionの実行を記録して解除 |
 | `reminder.sh`(UserPromptSubmit) | 初回と10回ごとの委譲リマインド、**初回と3回ごとの状態行(`status-line.sh`)の指示**、毎回の短い範囲確認、通知の表示、`/ofuro` の開始・終了、**初回と5回ごとの「未処理の義務」の通知**と、自動調査ジョブの起動 |

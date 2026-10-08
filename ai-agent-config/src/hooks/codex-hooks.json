@@ -6,6 +6,7 @@
     "PreToolUse": [
       { "matcher": "Bash",
         "hooks": [
+          { "type": "command", "command": "$HOME/.agents/hooks/danger-guard.sh" },
           { "type": "command", "command": "$HOME/.agents/hooks/secret-scan.sh" },
           { "type": "command", "command": "$HOME/.agents/hooks/gate.sh" }
         ] },
