@@ -559,6 +559,8 @@ out="$(python3 -W ignore "$HERE/danger-cases.py" "$HOOKS")"
 [ -z "$out" ] && ok || bad "danger_check: $out"
 out="$(python3 -W ignore "$HERE/danger-cases-review.py" "$HOOKS")"
 [ -z "$out" ] && ok || bad "danger_check (review cases): $out"
+out="$(python3 -W ignore "$HERE/danger-cases-review2.py" "$HOOKS")"
+[ -z "$out" ] && ok || bad "danger_check (second review): $out"
 cdhome="$(python3 "$HOOKS/danger_check.py" --cwd "$HOME" <<<'rm -rf *')"; [ -n "$cdhome" ] && ok || bad "danger_check: rm -rf * with the home directory as cwd"
 cdsub="$(python3 "$HOOKS/danger_check.py" --cwd "$HOME/proj" <<<'rm -rf *')"; [ -z "$cdsub" ] && ok || bad "danger_check: rm -rf * inside a project is fine"
 printf '%s\n' "$HOME/precious" >"$HOME/.config-danger-test" 2>/dev/null; mkdir -p "$HOME/.config/ai-agent-config"; printf '# mine\n~/precious\n' >"$HOME/.config/ai-agent-config/danger-paths.txt"
@@ -579,6 +581,8 @@ run danger-guard.sh "$(bashpl "$s2" 'rm -rf ~')"; expect_code "danger guard: /of
 run danger-guard.sh "$(jq -cn --arg s "$s" '{session_id:$s,hook_event_name:"PreToolUse",tool_name:"Bash",tool_input:{command:["bash","-lc","rm -rf ~"]},cwd:"/tmp"}')"; expect_code "danger guard: a command that arrives as an argv array" 2 "$RC"
 out="$(bash "$HOOKS/agy-adapter.sh" danger-guard.sh PreToolUse <<<"$(jq -cn --arg h "$HOME" '{conversationId:"c",workspacePaths:["/tmp"],toolCall:{name:"run_command",args:{CommandLine:"rm -rf *",Cwd:$h}}}')")"
 case "$out" in *'"decision":"deny"'*) ok ;; *) bad "danger guard through the agy adapter uses the command's own working directory ($out)" ;; esac
+run danger-guard.sh "$(jq -cn --arg s "$s" --arg h "$HOME" '{session_id:$s,hook_event_name:"PreToolUse",tool_name:"shell",cwd:"/tmp",tool_input:{command:["bash","-lc","rm -rf *"],workdir:$h}}')"; expect_code "danger guard: the tool's own working directory (workdir) counts" 2 "$RC"
+run danger-guard.sh "$(jq -cn --arg s "$s" '{session_id:$s,hook_event_name:"PreToolUse",tool_name:"exec_command",tool_input:{script:"rm -rf ~"}}')"; expect_code "danger guard: a command carried in a script field" 2 "$RC"
 out="$(bash "$HOOKS/agy-adapter.sh" danger-guard.sh PreToolUse <<<"$(jq -cn '{conversationId:"c",toolCall:{name:"run_command",args:{CommandLine:"rm -rf ~"}}}')")"
 case "$out" in *'"decision":"deny"'*) ok ;; *) bad "danger guard through the agy adapter is a hard deny ($out)" ;; esac
 
