@@ -52,9 +52,12 @@ except subprocess.TimeoutExpired:
 PY
   rc=$?
   if [ "$rc" -eq 0 ] && [ -s "$out" ]; then cat "$out"; echo "# agent: $a" >&2; rm -f "$out" "$err"; exit 0; fi
-  if head -c 4000 "$err" "$out" | python3 "$HOOK_DIR/limit-reset.py" --is-limit; then
+  # a refusal is a short error: the last lines of stderr, plus stdout only when it is tiny (a work product that
+  # merely talks about quotas or rate limits must not mark an agent unavailable)
+  sample="$( { tail -n 20 "$err"; [ "$(wc -c <"$out")" -le 600 ] && cat "$out"; } | head -c 4000)"
+  if printf '%s' "$sample" | python3 "$HOOK_DIR/limit-reset.py" --is-limit; then
     mkdir -p "$STATE/unavailable"
-    until_epoch="$(head -c 4000 "$err" "$out" | python3 "$HOOK_DIR/limit-reset.py" 2>/dev/null)"
+    until_epoch="$(printf '%s' "$sample" | python3 "$HOOK_DIR/limit-reset.py" 2>/dev/null)"
     if [ -n "$until_epoch" ]; then note="使用上限(agent-runが検知。エラー文の解除時刻まで)"
     else until_epoch=$(( $(date +%s) + 21600 )); note="使用上限(agent-runが検知。解除時刻が読めないため6時間後に再試行)"; fi
     printf '%s\t%s\n' "$until_epoch" "$note" >"$STATE/unavailable/$a.txt"
