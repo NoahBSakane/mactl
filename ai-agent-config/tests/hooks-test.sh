@@ -113,6 +113,11 @@ expect_code "reminder exits 0" 0 "$RC"
 case "$OUT" in *agents-probe*) ok ;; *) bad "first prompt carries delegation reminder" ;; esac
 run reminder.sh "$(jq -cn --arg s "$s" '{session_id:$s,hook_event_name:"UserPromptSubmit",prompt:"again",prompt_id:"b"}')"
 case "$OUT" in *agents-probe*) bad "2nd prompt should not repeat delegation reminder" ;; *) ok ;; esac
+# a delegated run is told it needs no approval, and is never told to ask for one
+s=$(new_sid)
+run reminder.sh "$(jq -cn --arg s "$s" '{session_id:$s,hook_event_name:"UserPromptSubmit",prompt:"task",prompt_id:"a"}')" AGENT_DELEGATED_BY=orch
+case "$OUT" in *"委譲先として起動"*) ok ;; *) bad "delegated first prompt: told it is a delegate" ;; esac
+case "$OUT" in *"質問UIで承認"*) bad "delegated first prompt: must not be asked for an approval" ;; *) ok ;; esac
 
 s=$(new_sid)
 run reminder.sh "$(jq -cn --arg s "$s" '{session_id:$s,hook_event_name:"UserPromptSubmit",prompt:"/ofuro テストを直して",prompt_id:"a",cwd:"/work/repo",permission_mode:"auto"}')"

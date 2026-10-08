@@ -4,7 +4,7 @@
 set -u
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CFG="$(cd "$HERE/.." && pwd)"
-export HOME="$(mktemp -d)"
+TMP_HOME="$(mktemp -d)"; export HOME="$TMP_HOME"   # the trap below deletes TMP_HOME, never $HOME (a stray reset of HOME must not turn it into the real one)
 unset AGENT_STATE_DIR
 FAKEBIN="$HOME/fakebin"; mkdir -p "$FAKEBIN"
 for c in codex agy muse grok; do printf '#!/bin/sh\nexit 0\n' >"$FAKEBIN/$c"; chmod +x "$FAKEBIN/$c"; done
@@ -16,7 +16,7 @@ mkdir -p "$HOME/Repo/not-git" "$HOME/.config/ai-agent-config/tpl"
 printf 'project rules\n' >"$HOME/.config/ai-agent-config/tpl/AGENTS.md"; printf '{"x":1}\n' >"$HOME/.config/ai-agent-config/tpl/settings.json"
 printf 'remote only\n' >"$HOME/.config/ai-agent-config/tpl/remote.md"
 printf 'lp-name\tproject\ttpl/AGENTS.md\tname=proj-a::AGENTS.md\talways\nlp-all\tproject\ttpl/settings.json\tall::.claude/settings.json\talways\tmanaged\nlp-remote\tproject\ttpl/remote.md\tremote=*example.org/team/*::docs/R.md\talways\n' >"$HOME/.config/ai-agent-config/local-manifest.tsv"
-trap 'rm -rf "$HOME"' EXIT
+trap 'rm -rf "$TMP_HOME"' EXIT
 pass=0; fail=0
 ok()  { pass=$((pass+1)); }
 bad() { fail=$((fail+1)); echo "FAIL: $1"; }
