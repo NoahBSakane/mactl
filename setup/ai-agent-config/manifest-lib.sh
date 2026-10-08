@@ -34,7 +34,7 @@ hash_path() {
   if [ -L "$p" ]; then echo "link:$(readlink "$p")"
   elif [ -f "$p" ]; then sha <"$p"
   elif [ -d "$p" ]; then
-    (cd "$p" && find . -type f | LC_ALL=C sort | while read -r f; do printf '%s %s\n' "$f" "$(sha <"$f")"; done) | sha
+    (cd "$p" && find . -type f ! -path '*/__pycache__/*' ! -name '*.pyc' | LC_ALL=C sort | while read -r f; do printf '%s %s\n' "$f" "$(sha <"$f")"; done) | sha
   else echo absent; fi
 }
 
@@ -113,7 +113,7 @@ build_desired() {
   local id="$1" mode="$2" src="$3" dest="$4" out="$WORK/$1" a b
   case "$mode" in
     copy|seed) cp -p "$(expand "$src")" "$out"; hash_path "$out" ;;
-    copydir) cp -a "$(expand "$src")" "$out"; hash_path "$out" ;;
+    copydir) cp -a "$(expand "$src")" "$out"; find "$out" \( -name __pycache__ -o -name '*.pyc' \) -prune -exec rm -rf {} + 2>/dev/null; hash_path "$out" ;;   # Python caches are not config
     link) echo "link:$(expand "$src")" ;;
     shims) build_shims "$out"; hash_path "$out" ;;
     merge-codex-persona)

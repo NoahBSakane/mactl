@@ -21,6 +21,7 @@ import re
 import shlex
 import sys
 
+sys.dont_write_bytecode = True  # the hooks are deployed as plain files: no __pycache__ next to them
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import agentconf  # noqa: E402
 
