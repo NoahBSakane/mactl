@@ -810,7 +810,7 @@ def literal_path_reason(expr, ctx):
     e = re.sub(r"os\.path\.join\(\s*(.*?)\s*,\s*(" + STR + r")\s*\)", lambda m: "%s/%s" % (m.group(1), m.group(3) or m.group(4)), e)
     e = re.sub(r"os\.path\.expanduser\(\s*(" + STR + r")\s*\)", lambda m: m.group(2) or m.group(3), e)
     e = re.sub(r"^\s*[A-Za-z_]\w*\s*:\s*", "", e)  # a labelled argument (Swift: atPath: ...)
-    e = re.sub(r"(?:Path\.home\(\)|(?:require\(['\"](?:node:)?os['\"]\)\.|\bos\.)homedir\(\)|os\.environ(?:\[['\"]HOME['\"]\]|\.get\(['\"]HOME['\"][^)]*\))|os\.getenv\(['\"]HOME['\"][^)]*\)|"
+    e = re.sub(r"(?:(?:\w+\.)*Path\.home\(\)|(?:require\(['\"](?:node:)?os['\"]\)\.|\bos\.)homedir\(\)|os\.environ(?:\[['\"]HOME['\"]\]|\.get\(['\"]HOME['\"][^)]*\))|os\.getenv\(['\"]HOME['\"][^)]*\)|"
                r"ENV\[['\"]HOME['\"]\]|ENV\.fetch\(['\"]HOME['\"][^)]*\)|\$ENV\{['\"]?HOME['\"]?\}|\$ENV\{HOME\}|Dir\.home(?:\([^)]*\))?|process\.env\.HOME|process\.env\[['\"]HOME['\"]\]|"
                r"Deno\.env\.get\(['\"]HOME['\"]\)|NSHomeDirectory\(\)|FileManager\.default\.homeDirectoryForCurrentUser(?:\.path)?|System\.getProperty\(['\"]user\.home['\"]\)|"
                r"__import__\(['\"]os['\"]\)\.path\.expanduser\(['\"]~['\"]\))", "~", e)
@@ -831,26 +831,150 @@ def literal_path_reason(expr, ctx):
 
 def interp_reasons(src, ctx, depth):
     """removal calls and shell strings inside an interpreter one-liner or script"""
+    import ast
+
     reasons = []
+    code = re.sub(r"^(?:-[^\s]+\s+)+", "", src)
+    try:
+        tree = ast.parse(code)
+    except (SyntaxError, ValueError):
+        tree = None
+    if tree is not None:
+        assigned = {}
+
+        class Resolve(ast.NodeTransformer):
+            def visit_Name(self, node):
+                return assigned.get(node.id, node)
+
+            def visit_BinOp(self, node):  # 'rm' + ' -rf ~'
+                node = self.generic_visit(node)
+                if isinstance(node.op, ast.Add) and all(isinstance(x, ast.Constant) and isinstance(x.value, str) for x in (node.left, node.right)):
+                    return ast.Constant(value=node.left.value + node.right.value)
+                return node
+
+            def visit_Call(self, node):
+                node = self.generic_visit(node)
+                f = node.func  # base64.b64decode('...').decode()
+                if isinstance(f, ast.Attribute) and f.attr == "decode" and isinstance(f.value, ast.Call) and call_name(f.value.func) in ("b64decode", "decodebytes") \
+                        and f.value.args and isinstance(f.value.args[0], ast.Constant) and isinstance(f.value.args[0].value, (str, bytes)):
+                    try:
+                        return ast.Constant(value=base64.b64decode(f.value.args[0].value).decode("utf-8", "replace"))
+                    except Exception:  # noqa: BLE001
+                        return node
+                if isinstance(node.func, ast.Name) and node.func.id == "__import__" and node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
+                    return ast.Name(id=node.args[0].value, ctx=ast.Load())
+                return node
+
+        def resolved(node):
+            # Parse a copy: substitutions must not alter the calls being visited.
+            return Resolve().visit(ast.parse(ast.unparse(node), mode="eval").body)
+
+        def call_name(node):
+            if isinstance(node, ast.Name):
+                return node.id
+            if isinstance(node, ast.Attribute):
+                return node.attr
+            if isinstance(node, ast.Call) and call_name(node.func) == "getattr" and len(node.args) > 1:
+                attr = resolved(node.args[1])
+                if isinstance(attr, ast.Constant) and isinstance(attr.value, str):
+                    return attr.value
+            return ""
+
+        shell_names = {"system", "popen", "execute", "execSync", "spawnSync", "check_call", "check_output", "run", "call", "Popen", "backticks", "exec", "spawn"}
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.Import, ast.ImportFrom)):
+                for alias in node.names:
+                    if alias.asname:
+                        assigned[alias.asname] = ast.Name(id=alias.name, ctx=ast.Load())
+            elif isinstance(node, (ast.Assign, ast.AnnAssign)) and node.value is not None:
+                value = resolved(node.value)
+                for target in node.targets if isinstance(node, ast.Assign) else [node.target]:
+                    if isinstance(target, ast.Name):
+                        assigned[target.id] = value
+        loop_vals = {}  # for p in ['/a', '/b']  /  [f(p) for p in (...)]: the names a loop variable takes
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.comprehension, ast.For)) and isinstance(node.target, ast.Name) and isinstance(node.iter, (ast.List, ast.Tuple, ast.Set)):
+                loop_vals.setdefault(node.target.id, []).extend(e.value for e in node.iter.elts if isinstance(e, ast.Constant) and isinstance(e.value, str))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = resolved(node.func)
+            name = call_name(func)
+            args = [resolved(arg) for arg in node.args]
+            args += [resolved(kw.value) for kw in node.keywords if kw.arg in ("path", "args", "command", "source")]
+            if not args:
+                continue
+            if re.fullmatch(DEL_NAMES, name) or name in ("rm", "remove") and isinstance(func, (ast.Attribute, ast.Call)):
+                cands = [ast.unparse(args[0])]
+                if isinstance(args[0], ast.Name):
+                    cands += [repr(v) for v in loop_vals.get(args[0].id, [])]
+                r = next((x for x in (literal_path_reason(c, ctx) for c in cands) if x), None)
+                if r:
+                    reasons.append("ワンライナー(スクリプト)が、保護された場所を消す恐れがあります: " + r)
+            if name in shell_names:
+                arg = args[0]
+                if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                    reasons += analyse(arg.value, ctx.copy(), depth + 1)
+                elif isinstance(arg, (ast.List, ast.Tuple)):
+                    items = []
+                    for item in arg.elts:
+                        r = literal_path_reason(ast.unparse(item), ctx)
+                        items.append("~" if r else item.value if isinstance(item, ast.Constant) and isinstance(item.value, str) else ast.unparse(item))
+                    reasons += analyse(" ".join("~" if i == "~" else shlex.quote(i) for i in items), ctx.copy(), depth + 1)
+            if name in ("exec", "eval", "compile") and isinstance(args[0], ast.Constant) and isinstance(args[0].value, str):
+                if depth > 5:
+                    reasons.append("入れ子のスクリプトが深すぎて解析できません")
+                else:
+                    reasons += interp_reasons(args[0].value, ctx, depth + 1)
+        # a removal function handed on without being called (map(shutil.rmtree, [...])): judge it by the paths named anywhere
+        called = {id(n.func) for n in ast.walk(tree) if isinstance(n, ast.Call)}
+        passed = [n for n in ast.walk(tree) if isinstance(n, (ast.Name, ast.Attribute)) and id(n) not in called
+                  and re.fullmatch(DEL_NAMES, n.id if isinstance(n, ast.Name) else n.attr)]
+        if passed:
+            for n in ast.walk(tree):
+                if isinstance(n, ast.Constant) and isinstance(n.value, str):
+                    r = literal_path_reason(repr(n.value), ctx)
+                    if r:
+                        reasons.append("ワンライナー(スクリプト)が、削除する関数に保護された場所を渡す恐れがあります: " + r)
+                        break
+        return reasons
+
+    def skeleton(text):
+        # Keep offsets, so arguments can still be read from the original source.
+        pattern = r"\"\"\"[\s\S]*?\"\"\"|\x27\x27\x27[\s\S]*?\x27\x27\x27|\"(?:\\.|[^\"\\])*\"|\x27(?:\\.|[^\x27\\])*\x27|`(?:\\.|[^`\\])*`|/\*[\s\S]*?\*/|//[^\n]*|\#[^\n]*"
+        return re.sub(pattern, lambda m: "".join("\n" if c == "\n" else " " for c in m.group()), text)
+
+    src = code
+    bones = skeleton(src)
     # `h = os.environ['HOME']` ... `rmtree(h)`: a plain variable that holds a path stands for it
     assigned = {}
     for m in re.finditer(r"(?:^|[;\n{]\s*)(?:(?:const|let|var|my|local)\s+)?\$?([A-Za-z_]\w*)\s*=\s*([^=;\n][^;\n]*)", src):
-        assigned[m.group(1)] = m.group(2).strip().rstrip(";")
+        if bones[m.start(1):m.end(1)].strip():
+            assigned[m.group(1)] = m.group(2).strip().rstrip(";")
     for name_, val_ in assigned.items():
         if re.fullmatch(r"[A-Za-z_]\w*", name_) and name_ not in ("ENV", "os") and len(val_) < 300:
             src = re.sub(r"(?<![\w.'\"])" + re.escape(name_) + r"(?![\w'\"(])(?=\s*[),])", lambda m, v=val_: v, src)
+    bones = skeleton(src)
     # shell strings handed to system()/exec()/subprocess: run them through the shell analysis
     for m in re.finditer(r"(?:system|popen|execute|execSync|exec|spawnSync|check_call|check_output|run|call|Popen|backticks|do shell script)"
                          r"\s*\(?\s*" + STR, src):
+        if not bones[m.start():m.start() + 1].strip():
+            continue
         cmd = m.group(1) or m.group(2)
         if cmd and re.match(r"^\s*(sudo\s+)?(rm|find|dd|diskutil|mv|chmod|chown|rsync|git|truncate|cp|mkfs|newfs|shred|trash|tar|zip|sh|bash)\b", cmd):
             reasons += analyse(cmd, ctx.copy(), depth + 1)
     for m in re.finditer(r"\b(?:exec|spawn)\s+((?:sudo\s+)?(?:rm|find|dd|diskutil|mv|chmod|chown|rsync|truncate|shred|trash)\b[^;\n'\"]*)", src):
+        if not bones[m.start():m.start() + 1].strip():
+            continue
         reasons += analyse(m.group(1), ctx.copy(), depth + 1)
     for m in re.finditer(r"do shell script\s+" + STR, src):
+        if not bones[m.start():m.start() + 1].strip():
+            continue
         reasons += analyse(m.group(1) or m.group(2) or "", ctx.copy(), depth + 1)
     # list form: ['rm', '-rf', path]
     for m in re.finditer(r"\[\s*['\"](rm|find|mv|chmod|chown|shred|trash|rimraf)['\"]\s*,((?:[^\]\[]|\[[^\]]*\])*)\]", src):
+        if bones[m.start()] != "[" or not re.search(r"\b(?:system|popen|execute|execSync|exec|spawn|spawnSync|check_call|check_output|run|call|Popen)\s*\(\s*$", bones[:m.start()]):
+            continue
         items = []
         for part in re.split(r",(?![^()]*\))", m.group(2)):
             r = literal_path_reason(part, ctx)
@@ -858,11 +982,27 @@ def interp_reasons(src, ctx, depth):
         reasons += analyse(m.group(1) + " " + " ".join(shlex.quote(i) if i != "~" else "~" for i in items), ctx.copy(), depth + 1)
     # direct removal calls: rmtree(path), shutil.rmtree(path), fs.rmSync(path), FileUtils.rm_rf(path) ...
     for m in re.finditer(r"(?<![=\w])" + DEL_NAMES + r"\s*\(?\s*((?:[^(),]|\([^()]*(?:\([^()]*\)[^()]*)*\))+)", src):
+        if not bones[m.start():m.start() + 1].strip():
+            continue
         r = literal_path_reason(m.group(1), ctx)
         if r:
             reasons.append("ワンライナー(スクリプト)が、保護された場所を消す恐れがあります: " + r)
-    if re.search(r"Finder.{0,60}delete\s+(every\s+item|folder|items?)\s+of\s+(home|folder|desktop|documents)", src, re.I | re.S):
-        reasons.append("osascript で Finder からホームの中身を消そうとしています")
+    for m in re.finditer(r"\b(?:eval|compile|exec)\s*\(\s*" + STR, src):
+        if not bones[m.start():m.start() + 1].strip():
+            continue
+        try:
+            code_ = ast.literal_eval(src[m.start(1) - 1:m.end(1) + 1] if m.group(1) is not None else src[m.start(2) - 1:m.end(2) + 1])
+        except (SyntaxError, ValueError):
+            continue
+        if depth > 5:
+            reasons.append("入れ子のスクリプトが深すぎて解析できません")
+        else:
+            reasons += interp_reasons(code_, ctx, depth + 1)
+    for m in re.finditer(r"Finder.{0,60}delete\s+(every\s+item|folder|items?)\s+of\s+(home|folder|desktop|documents)", src, re.I | re.S):
+        # AppleScript names the application with a string, but the tell is code.
+        prefix = re.search(r"tell\s+application\s+['\"]$", src[:m.start()], re.I)
+        if bones[m.start():m.start() + 1].strip() or prefix and bones[prefix.start():prefix.start() + 4].strip():
+            reasons.append("osascript で Finder からホームの中身を消そうとしています")
     return reasons
 
 
