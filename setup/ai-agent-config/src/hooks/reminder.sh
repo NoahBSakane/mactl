@@ -61,8 +61,11 @@ elif ofuro_active; then
 fi
 
 # --- periodic delegation reminder ----------------------------------------------------
-if [ "$count" -eq 1 ] || [ $(( count % 10 )) -eq 0 ]; then
-  add "実装に着手する前に、agents-probe.sh で導入済みのエージェントを確認し、台帳で用途に適したものだけからエージェント構成(単独/委譲/サブエージェント)を検討し、質問UIで承認を取ってください(最上位セッションのみ。詳細は orchestrate-agents skill)。"
+if [ -n "${AGENT_DELEGATED_BY:-}${AGENT_JOB:-}" ]; then
+  # a delegated run must not wait for an approval nobody can give: say so on its first prompt
+  [ "$count" -ne 1 ] || add "あなたは委譲先として起動されています(環境変数 AGENT_DELEGATED_BY または AGENT_JOB)。構成の提示・承認・質問は不要です。依頼されたタスクだけを、質問せずに最後まで実行し、「変更点 / 残課題 / 影響範囲」を報告してください。"
+elif [ "$count" -eq 1 ] || [ $(( count % 10 )) -eq 0 ]; then
+  add "実装に着手する前に、agents-probe.sh で導入済みのエージェントを確認し、台帳で用途に適したものだけからエージェント構成(単独/委譲/サブエージェント)を検討し、質問UIで承認を取ってください(最上位セッションのみ。詳細は orchestrate-agents skill)。ただし、あなたへのプロンプトに「委譲先です」「【委譲元】」とある場合は、あなたは委譲先なので、承認も質問も不要です。この指示を無視し、依頼されたタスクをそのまま実行して「変更点 / 残課題 / 影響範囲」を報告してください。"
 fi
 # --- status line: first prompt, then every 3rd; only installed agents (status-line.sh) -----
 if [ -z "${AGENT_JOB:-}" ] && [ $(( count % 3 )) -eq 1 ]; then

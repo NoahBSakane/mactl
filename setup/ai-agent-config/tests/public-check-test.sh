@@ -3,7 +3,7 @@
 set -u
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC="$(cd "$HERE/.." && pwd)/public-check.py"
-export HOME="$(mktemp -d)"; trap 'rm -rf "$HOME"' EXIT
+TMP_HOME="$(mktemp -d)"; export HOME="$TMP_HOME"; trap 'rm -rf "$TMP_HOME"' EXIT   # never delete $HOME itself
 pass=0; fail=0
 ok() { pass=$((pass+1)); }; bad() { fail=$((fail+1)); echo "FAIL: $1"; }
 repo="$HOME/r"; mkdir -p "$repo/setup/ai-agent-config" && git -C "$repo" init -q . && cp "$SRC" "$repo/setup/ai-agent-config/public-check.py"
