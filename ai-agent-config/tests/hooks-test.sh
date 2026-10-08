@@ -555,8 +555,10 @@ s=$(new_sid); run reminder.sh "$(jq -cn --arg s "$s" --arg c "$hr" '{session_id:
 grep -qx '/.agent-handoff/' "$hr/.git/info/exclude" && ok || bad "reminder: the folder in the working directory is excluded on a prompt"
 
 # ---------- danger guard: never wipe out the home directory, the root or a system directory ----------
-out="$(python3 "$HERE/danger-cases.py" "$HOOKS")"
+out="$(python3 -W ignore "$HERE/danger-cases.py" "$HOOKS")"
 [ -z "$out" ] && ok || bad "danger_check: $out"
+out="$(python3 -W ignore "$HERE/danger-cases-review.py" "$HOOKS")"
+[ -z "$out" ] && ok || bad "danger_check (review cases): $out"
 cdhome="$(python3 "$HOOKS/danger_check.py" --cwd "$HOME" <<<'rm -rf *')"; [ -n "$cdhome" ] && ok || bad "danger_check: rm -rf * with the home directory as cwd"
 cdsub="$(python3 "$HOOKS/danger_check.py" --cwd "$HOME/proj" <<<'rm -rf *')"; [ -z "$cdsub" ] && ok || bad "danger_check: rm -rf * inside a project is fine"
 printf '%s\n' "$HOME/precious" >"$HOME/.config-danger-test" 2>/dev/null; mkdir -p "$HOME/.config/ai-agent-config"; printf '# mine\n~/precious\n' >"$HOME/.config/ai-agent-config/danger-paths.txt"
@@ -574,6 +576,9 @@ run danger-guard.sh 'not json'; expect_code "danger guard: fails open on a malfo
 mkdir -p "$TMP_HOME/.agent-state/ofuro"; s2=$(new_sid)
 run reminder.sh "$(jq -cn --arg s "$s2" '{session_id:$s,hook_event_name:"UserPromptSubmit",prompt:"/ofuro 30m x",prompt_id:"a"}')"
 run danger-guard.sh "$(bashpl "$s2" 'rm -rf ~')"; expect_code "danger guard: /ofuro does not lift it" 2 "$RC"
+run danger-guard.sh "$(jq -cn --arg s "$s" '{session_id:$s,hook_event_name:"PreToolUse",tool_name:"Bash",tool_input:{command:["bash","-lc","rm -rf ~"]},cwd:"/tmp"}')"; expect_code "danger guard: a command that arrives as an argv array" 2 "$RC"
+out="$(bash "$HOOKS/agy-adapter.sh" danger-guard.sh PreToolUse <<<"$(jq -cn --arg h "$HOME" '{conversationId:"c",workspacePaths:["/tmp"],toolCall:{name:"run_command",args:{CommandLine:"rm -rf *",Cwd:$h}}}')")"
+case "$out" in *'"decision":"deny"'*) ok ;; *) bad "danger guard through the agy adapter uses the command's own working directory ($out)" ;; esac
 out="$(bash "$HOOKS/agy-adapter.sh" danger-guard.sh PreToolUse <<<"$(jq -cn '{conversationId:"c",toolCall:{name:"run_command",args:{CommandLine:"rm -rf ~"}}}')")"
 case "$out" in *'"decision":"deny"'*) ok ;; *) bad "danger guard through the agy adapter is a hard deny ($out)" ;; esac
 

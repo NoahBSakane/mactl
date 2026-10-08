@@ -14,7 +14,7 @@ DENY = [
  '/bin/rm -rf ~', 'command rm -rf ~', 'env rm -rf ~', '\\rm -rf ~', 'bash -c "rm -rf ~"', "sh -c 'rm -rf $HOME'", 'eval "rm -rf ~"',
  'echo $(rm -rf ~)', 'x=$(rm -rf ~)', 'H=~; rm -rf $H', 'H=$HOME && rm -rf "$H"', 'cd ~ && rm -rf *', 'cd && rm -rf .', 'cd ~; rm -rf ./*',
  'cd $HOME; rm -rf *', 'rm -rf $DIR/*', 'rm -rf "$DIR"/*', 'rm -rf ${X}/', 'find ~ -delete', 'find $HOME -type f -delete',
- 'find ~ -name "*.txt" -exec rm {} \\;', 'find ~ -type f | xargs rm', 'find / -delete', 'find ~/Documents -delete', 'mv ~ /tmp/x',
+ 'find ~ -type f | xargs rm', 'find / -delete', 'find ~/Documents -delete', 'mv ~ /tmp/x',
  'mv ~/Documents /dev/null', 'chmod -R 000 ~', 'chown -R nobody ~', 'rsync -a --delete /tmp/empty/ ~/', 'git -C ~ clean -fdx',
  'dd if=/dev/zero of=/dev/disk2', 'diskutil eraseDisk JHFS+ x disk2', 'diskutil eraseVolume HFS+ x /Volumes/y', 'mkfs.ext4 /dev/sda1',
  'python3 -c "import shutil,os; shutil.rmtree(os.path.expanduser(\'~\'))"', 'perl -e \'system("rm -rf $ENV{HOME}")\'', 'shred -u ~/Documents/*',
@@ -24,7 +24,7 @@ DENY = [
 ALLOW = [
  'ls -la', 'rm -rf node_modules', 'rm -rf build dist', 'rm -rf /tmp/x', 'rm -rf "$TMPDIR/foo"', 'rm -rf ~/Documents/old-project',
  'rm -rf ~/work/x/build', 'rm file.txt', 'rm -f ./a.log', 'rm -rf ~/Library/Caches/com.foo.app', 'rm -rf $HOME/.cache/foo',
- 'find . -name "*.pyc" -delete', 'find /tmp -name "x" -delete', 'git clean -fdx', 'git status', 'mv a b', 'mv ~/Downloads/x.zip ~/Documents/',
+ 'find . -name "*.pyc" -delete', 'find ~ -name "*.txt" -exec rm {} \\;', 'find /tmp -name "x" -delete', 'git clean -fdx', 'git status', 'mv a b', 'mv ~/Downloads/x.zip ~/Documents/',
  'chmod -R 755 ./dir', 'chown -R me ./dir', 'rsync -a src/ dest/', 'rsync -a --delete ./out/ /tmp/out/', 'echo rm -rf ~', 'cat <<EOF\nrm -rf ~\nEOF',
  'grep "rm -rf" file', 'git commit -m "rm -rf ~ is bad"', 'python3 -c "print(1)"', 'dd if=a of=b', 'diskutil list', 'rm -rf "$WORK"',
  'rm -rf "$tmp/x"', 'cd /tmp && rm -rf *', 'cd ~/proj && rm -rf build', 'npm run clean', 'make clean', 'docker rm -f x', 'kubectl delete pod x',

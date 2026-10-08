@@ -55,7 +55,8 @@ ofuro_active() {
 conf() { python3 "$HOOK_DIR/agentconf.py" "$@" 2>/dev/null || true; }
 tool_class() { conf toolclass "$1"; }   # shell | edit | subagent | other
 is_shell_tool() { [ "$(tool_class "$1")" = shell ]; }
-tool_command() { jget '.tool_input.command // .tool_input.CommandLine // .tool_input.cmd'; }
+# a command may arrive as a string or as an argv array (Codex): both become one line
+tool_command() { jq -r '(.tool_input.command // .tool_input.CommandLine // .tool_input.cmd // empty) | if type == "array" then map(@sh) | join(" ") else . end' <<<"$PAYLOAD" 2>/dev/null || true; }
 
 # Agents (agents.conf sections) launched by an executing command in a shell command line, one per line.
 classify_bash() { printf '%s' "$1" | python3 "$HOOK_DIR/parse_cmd.py" cmd 2>/dev/null || true; }

@@ -1,10 +1,12 @@
 {
   "PreToolUse": [
     { "matcher": ".*",
-      "hooks": [ { "type": "command", "command": "$HOME/.agents/hooks/agy-adapter.sh agy-job-guard.sh PreToolUse", "timeout": 15 } ] },
-    { "matcher": "run_command",
       "hooks": [
         { "type": "command", "command": "$HOME/.agents/hooks/agy-adapter.sh danger-guard.sh PreToolUse", "timeout": 15 },
+        { "type": "command", "command": "$HOME/.agents/hooks/agy-adapter.sh agy-job-guard.sh PreToolUse", "timeout": 15 }
+      ] },
+    { "matcher": "run_command",
+      "hooks": [
         { "type": "command", "command": "$HOME/.agents/hooks/agy-adapter.sh secret-scan.sh PreToolUse", "timeout": 15 },
         { "type": "command", "command": "$HOME/.agents/hooks/agy-adapter.sh gate.sh PreToolUse", "timeout": 15 }
       ] },

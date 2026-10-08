@@ -64,7 +64,7 @@ norm="$(jq -c --arg ev "$event" '
                elif (. == "write_to_file" or . == "replace_file_content" or . == "multi_replace_file_content") then "Edit"
                else . end;
   { session_id: (.conversationId // ""), hook_event_name: $ev,
-    cwd: ((.workspacePaths // [""])[0]), transcript_path: (.transcriptPath // ""),
+    cwd: ((.toolCall.args.Cwd // .toolCall.args.cwd // .toolCall.args.WorkingDirectory) // ((.workspacePaths // [""])[0])), transcript_path: (.transcriptPath // ""),
     tool_name: ((.toolCall.name // "") | mapname),
     tool_input: ((.toolCall.args // {}) + { command: (.toolCall.args.CommandLine // null), file_path: (.toolCall.args.TargetFile // null) }) }' <<<"$payload" 2>/dev/null)" || allow
 [ -n "$norm" ] || allow

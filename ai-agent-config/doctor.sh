@@ -31,6 +31,8 @@ row() { # level tool note
 row need bash "シェル"
 row need jq "JSON(hook・install が使う)"
 row need python3 "hook・manifest 処理が使う"
+if command -v python3 >/dev/null 2>&1 && ! python3 -c "import sys" >/dev/null 2>&1; then miss=$((miss+1)); printf '[MISSING] %-8s %s → %s\n' python3 "あるが動かない(Command Line Tools が無いと、macOS の python3 は見かけだけです)" "$(hint python3)"; fi
+if command -v jq >/dev/null 2>&1 && ! jq --version >/dev/null 2>&1; then miss=$((miss+1)); printf '[MISSING] %-8s %s → %s\n' jq "あるが動かない" "$(hint jq)"; fi
 if command -v python3 >/dev/null 2>&1 && ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 8) else 1)' 2>/dev/null; then
   miss=$((miss+1)); printf '[MISSING] %-8s %s → %s\n' python3 "3.8 以上が必要です(今: $(python3 --version 2>&1))" "$(hint python3)"
 fi
