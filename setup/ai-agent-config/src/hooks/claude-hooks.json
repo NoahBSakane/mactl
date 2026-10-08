@@ -4,6 +4,8 @@
       { "hooks": [ { "type": "command", "command": "AGENT_SELF=claude $HOME/.agents/hooks/reminder.sh" } ] }
     ],
     "PreToolUse": [
+      { "matcher": "*",
+        "hooks": [ { "type": "command", "command": "$HOME/.agents/hooks/danger-guard.sh" } ] },
       { "matcher": "Bash",
         "hooks": [
           { "type": "command", "command": "$HOME/.agents/hooks/secret-scan.sh" },
