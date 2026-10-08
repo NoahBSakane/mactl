@@ -6,8 +6,8 @@
 #
 # Agents are tried in the order of [runtime] order in agents.conf. One that has no template for
 # the key, is not installed, is logged out, or is marked unavailable is skipped. A run that
-# fails with something that looks like a usage/rate limit marks that agent unavailable until the
-# moment its error text names (limit-reset.py; 6 hours when it names none), in
+# fails with a recent structured usage-limit signal (or a matching error text) marks that agent
+# unavailable until the moment its error text names (limit-reset.py; 6 hours when it names none), in
 # ~/.agent-state/unavailable/<agent>.txt, and the next agent takes over.
 # stdout: the job's output. stderr: `# agent: <name>` on success. Exit 0 on success.
 # The jobs run with AGENT_JOB=1 and AGENT_DELEGATED_BY=agent-run (no approval prompts, no
@@ -42,6 +42,7 @@ for a in $(candidates "$key"); do
   auth="$(conf get "$a" auth)"
   if [ -n "$auth" ] && ! sh -c "$auth" >/dev/null 2>&1; then tried="$tried $a(未認証)"; continue; fi
   out="$(mktemp)"; err="$(mktemp)"
+  since=$(date +%s)
   python3 - "$JOB_TIMEOUT" "$(conf get "$a" "$key")" >"$out" 2>"$err" <<'PY'
 import subprocess, sys
 try:
@@ -52,10 +53,14 @@ except subprocess.TimeoutExpired:
 PY
   rc=$?
   if [ "$rc" -eq 0 ] && [ -s "$out" ]; then cat "$out"; echo "# agent: $a" >&2; rm -f "$out" "$err"; exit 0; fi
-  # a refusal is a short error: the last lines of stderr, plus stdout only when it is tiny (a work product that
-  # merely talks about quotas or rate limits must not mark an agent unavailable)
-  sample="$( { tail -n 20 "$err"; [ "$(wc -c <"$out")" -le 600 ] && cat "$out"; } | head -c 4000)"
-  if printf '%s' "$sample" | python3 "$HOOK_DIR/limit-reset.py" --is-limit; then
+  # Prefer session/log signals; fall back to the last stderr lines plus tiny stdout (a work product
+  # merely talking about quotas or rate limits must not mark an agent unavailable).
+  sample="$(python3 "$HOOK_DIR/limit-reset.py" --structured "$a" --since "$since" 2>/dev/null)"
+  structured_limit=0; [ -n "$sample" ] && structured_limit=1
+  if [ "$structured_limit" -eq 0 ]; then
+    sample="$( { tail -n 20 "$err"; [ "$(wc -c <"$out")" -le 600 ] && cat "$out"; } | head -c 4000)"
+  fi
+  if [ "$structured_limit" -eq 1 ] || printf '%s' "$sample" | python3 "$HOOK_DIR/limit-reset.py" --is-limit; then
     mkdir -p "$STATE/unavailable"
     until_epoch="$(printf '%s' "$sample" | python3 "$HOOK_DIR/limit-reset.py" 2>/dev/null)"
     if [ -n "$until_epoch" ]; then note="使用上限(agent-runが検知。エラー文の解除時刻まで)"
