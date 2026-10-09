@@ -25,9 +25,14 @@ if [ "$skip_registry" -eq 0 ] && [ -f "$REGISTRY" ]; then
   fi
 fi
 
+pending=0; latest=""
 for f in "$STATE"/proposals/registry-*.md; do
-  [ -f "$f" ] && { echo "台帳の更新提案(自動調査の結果)が届いています: ${f/#$HOME/~}。refresh-registry skill で検証して反映し、終わったら proposals/done/ へ移してください。"; break; }
+  [ -f "$f" ] || continue
+  pending=$((pending + 1)); latest="$f"
 done
+if [ "$pending" -gt 0 ]; then
+  echo "台帳の更新提案(自動調査の結果)が ${pending} 件届いています(最新: ${latest/#$HOME/~})。refresh-registry skill で検証して反映し、処理済みの報告を proposals/done/ へ移してください。未処理でも毎日の自動調査は続きます。"
+fi
 
 if [ -f "$PROPOSALS" ]; then
   n="$(awk '/^```/{f=!f; next} !f && /^- 状態: 未検討/{c++} END{print c+0}' "$PROPOSALS" 2>/dev/null)"

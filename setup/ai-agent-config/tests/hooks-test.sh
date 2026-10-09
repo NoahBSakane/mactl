@@ -242,10 +242,16 @@ adapt gate.sh PreToolUse "$(ag "$s" write_to_file "$(jq -cn --arg p "$HOME/AGENT
 # ---------- obligations in the reminder, background research job, memory harvest ----------
 printf '<!-- verified agent=codex date=2020-01-01 -->\n' >"$HOME/.knowledge/ai-agents.md"
 printf '## a\n\n- 状態: 未検討\n\n## b\n\n- 状態: 未検討\n\n## c\n\n- 状態: 採用(x)\n' >"$HOME/.knowledge/rule-proposals.md"
+mkdir -p "$AGENT_STATE_DIR/proposals/done"
+printf 'old report\n' >"$AGENT_STATE_DIR/proposals/registry-20200101.md"
+printf 'latest report\n' >"$AGENT_STATE_DIR/proposals/registry-20200102.md"
+printf 'processed report\n' >"$AGENT_STATE_DIR/proposals/done/registry-20190101.md"
 s=$(new_sid)
 run reminder.sh "$(jq -cn --arg s "$s" '{session_id:$s,hook_event_name:"UserPromptSubmit",prompt:"hi",prompt_id:"a"}')" AGENTS_CONF=/nonexistent
 case "$OUT" in *"未検討のルール提案が 2 件"*) ok ;; *) bad "reminder lists pending rule proposals" ;; esac
 case "$OUT" in *"台帳の確認が1日以上経過しています"*) ok ;; *) bad "reminder lists the stale registry" ;; esac
+case "$OUT" in *"台帳の更新提案(自動調査の結果)が 2 件届いています(最新:"*"registry-20200102.md"*) ok ;; *) bad "reminder aggregates pending registry reports with count and latest path" ;; esac
+[ "$(grep -c '台帳の更新提案' <<<"$OUT")" -eq 1 ] && ok || bad "pending registry reports occupy one reminder line"
 run reminder.sh "$(jq -cn --arg s "$s" '{session_id:$s,hook_event_name:"UserPromptSubmit",prompt:"again",prompt_id:"b"}')"
 case "$OUT" in *"未処理の義務"*) bad "obligations are not repeated on the 2nd prompt" ;; *) ok ;; esac
 for i in 3 4 5; do run reminder.sh "$(jq -cn --arg s "$s" --arg i "$i" '{session_id:$s,hook_event_name:"UserPromptSubmit",prompt:"p",prompt_id:$i}')"; done

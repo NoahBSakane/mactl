@@ -5,7 +5,7 @@
 #
 # Read-only web research returns a complete candidate. registry-apply.py applies only
 # usage, priority content and newer verification dates; sensitive changes await review.
-# Successful reports are archived; proposals block further jobs until reviewed.
+# Successful reports are archived; pending proposals do not block daily jobs.
 # Guards: one job at a time (lock), at most once per day (stamp), never from inside the job
 # itself (AGENT_JOB), skipped when no agent can run a research job right now.
 set -uo pipefail
@@ -34,7 +34,6 @@ case "${1:-}" in
     [ -z "${AGENT_JOB:-}" ] || exit 0
     bash "$RUNNER" --check research || exit 0
     stale || exit 0
-    ls "$PROP"/registry-*.md >/dev/null 2>&1 && exit 0
     [ ! -d "$LOCK" ] || exit 0
     if [ -f "$STAMP" ] && [ $(( $(date +%s) - $(stat -f %m "$STAMP") )) -lt 86400 ]; then exit 0; fi
     mkdir -p "$STATE"; : >"$STAMP"
@@ -50,6 +49,7 @@ case "${1:-}" in
 
 現在の台帳を、最新の調査結果で更新した全文を <<<LEDGER と LEDGER>>> の独立した行で挟んで出力してください。更新してよいのは、各エージェント($AGENT_NAMES)の『適切用途』の行(続き行を含む)と『代行先の優先順位』の節の中身、および verified の日付(今日: $(date +%Y-%m-%d))だけです。見出しと agent 名は変えないでください。
 公式ドキュメントと独立ベンチマーク(Artificial Analysis の Coding Agent Index、Terminal-Bench 等)を調べてください。新しいモデル(各社の新世代・新階級など)があれば、適切用途の行に、確認できた根拠(出典URL・格付け A=独立ベンチ B=第三者 C=公式の機能記述のみ D=根拠なし・日付)つきで足してください。
+順位・指数・ベンチマークの数値は、検索結果の要約だけで書かず、一次ページ(公式の leaderboard、Artificial Analysis、公式ドキュメント)を WebFetch して本文で確かめてから台帳へ書いてください。本文を取得できなかった数値を台帳に書く場合は『本文は未取得(検索結果の要約で確認)』と明記し、格付けを1段階下げてください(A→B)。前回の台帳に既にある数値は、本文で再確認できなくても、そのまま残してよいので消さないでください。
 コマンド・フラグ・承認方式・指示ファイルの場所の変更が必要だと分かった場合は、台帳には書かず、マーカーの後ろの『要確認』の節に、変更案・公式の根拠・URLを書いてください。要確認が無ければ節の中身は空にしてください。
 確認できない点は『確認できず』と書き、推測で埋めないでください。
 
@@ -86,12 +86,19 @@ PYREVIEW
       if [ "$review" -eq 1 ]; then
         mkdir -p "$PROP"
         dest="$PROP/registry-$today.md"
-        msg="${msg} 要確認の調査報告があります: ${dest}。refresh-registry skill で根拠を検証して確認してください。"
       else
         dest="$work/registry-$today.md"
         msg="${msg:-台帳の自動調査が完了しました(担当: ${who:-不明}、変更なし)。} 報告: ${dest}。"
       fi
       { printf '<!-- researched-by: %s on %s -->\n\n' "${who:-unknown}" "$(date +%Y-%m-%d)"; cat "$out"; printf '\n<!-- apply-result\n%s\n-->\n' "$result"; } >"$dest"
+      if [ "$review" -eq 1 ]; then
+        pending=0; latest=""
+        for f in "$PROP"/registry-*.md; do
+          [ -f "$f" ] || continue
+          pending=$((pending + 1)); latest="$f"
+        done
+        msg="${msg} 未処理の要確認の報告が ${pending} 件あります(最新: ${latest})。refresh-registry skill で根拠を検証して確認してください。"
+      fi
       rm -f "$out" "$err" "$work/.registry-$today.prompt"
       notice "$msg"
     else
