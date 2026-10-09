@@ -7,7 +7,7 @@
 #
 #   agents-probe.sh            human-readable table (+ models, + registry freshness)
 #   agents-probe.sh --json     machine-readable summary
-#   agents-probe.sh --fresh    ignore the cache (default TTL 6h)
+#   agents-probe.sh --fresh    ignore the cache (default TTL 10m)
 #   agents-probe.sh --check    also verify that every flag the registry declares still
 #                              exists in the CLI's --help (queues a notice if one vanished)
 #
@@ -20,8 +20,8 @@ STATE="${AGENT_STATE_DIR:-$HOME/.agent-state}"
 HOOKS="${AGENTS_HOOKS_DIR:-$HOME/.agents/hooks}"
 REGISTRY="${AGENTS_REGISTRY:-$HOME/.knowledge/ai-agents.md}"
 CACHE="$STATE/probe-cache.txt"
-TTL="${AGENTS_PROBE_TTL:-21600}"
-STALE_DAYS="${AGENTS_STALE_DAYS:-14}"
+TTL="${AGENTS_PROBE_TTL:-600}"
+STALE_DAYS="${AGENTS_STALE_DAYS:-1}"
 JSON=0; FRESH=0; CHECK=0
 for a in "$@"; do case "$a" in --json) JSON=1 ;; --fresh) FRESH=1 ;; --check) CHECK=1 ;; -h|--help) sed -n 2,17p "$0"; exit 0 ;; esac; done
 mkdir -p "$STATE/alerts" 2>/dev/null || true
@@ -98,16 +98,16 @@ if [ -f "$REGISTRY" ]; then
   stale=""
   while read -r agent date; do
     [ -n "$date" ] || continue
-    age=$(( ( $(date +%s) - $(date -j -f %Y-%m-%d "$date" +%s 2>/dev/null || echo 0) ) / 86400 ))
-    [ "$age" -gt "$STALE_DAYS" ] && stale="$stale $agent(${age}日)"
+    age=$(( ( $(date +%s) - $(date -j -f "%Y-%m-%d %H:%M:%S" "$date 00:00:00" +%s 2>/dev/null || echo 0) ) / 86400 ))
+    [ "$age" -ge "$STALE_DAYS" ] && stale="$stale $agent(${age}日)"
   done < <(sed -nE 's/.*<!-- verified agent=([a-z]+) date=([0-9-]+) -->.*/\1 \2/p' "$REGISTRY")
   markers="$(grep -c '<!-- verified agent=' "$REGISTRY" 2>/dev/null || true)"
   if [ "${markers:-0}" -eq 0 ]; then
     echo "台帳に確認日マーカー(<!-- verified agent=... date=... -->)がありません。refresh-registry skill で付与してください"
   elif [ -n "$stale" ]; then
-    echo "台帳の確認が${STALE_DAYS}日を超えたエージェント:$stale → 自動調査の提案があればそれを、無ければ refresh-registry skill を実行してください(作業は止めない)"
+    echo "台帳の確認が${STALE_DAYS}日以上経過したエージェント:$stale → 毎日の自動調査で更新します。要確認の提案や差分に違和感があれば refresh-registry skill で確認してください(作業は止めない)"
   else
-    echo "台帳: 全エージェントの確認日は${STALE_DAYS}日以内"
+    echo "台帳: 全エージェントの確認日は${STALE_DAYS}日未満"
   fi
 else
   echo "台帳が見つかりません: $REGISTRY"
