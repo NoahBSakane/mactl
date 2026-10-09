@@ -12,7 +12,7 @@
 
 ## Claude Code(`claude`)
 
-<!-- verified agent=claude date=2026-10-06 -->
+<!-- verified agent=claude date=2026-10-09 -->
 <!-- flags agent=claude cmd="" : --print --permission-mode --model --effort --allowedTools -->
 
 - 非対話: `claude -p "<prompt>"`(`--output-format stream-json`)。承認: `--permission-mode auto|dontAsk|bypassPermissions`、`--dangerously-skip-permissions`(隔離環境のみ)。
@@ -24,11 +24,12 @@
 - メモリ: `~/.claude/projects/<プロジェクト>/memory/*.md`(自動メモリ。`MEMORY.md` は索引)。**確認済み 2026-10-07**
 - 許可ルール(**実機確認 2026-10-07**): ヘッドレス(`-p`)は対話の承認ができず、許可の無いツールは自動で拒否される(「no output produced — a tool required the "read_url" permission …」)。設定は `~/.gemini/antigravity-cli/settings.json` の `permissions.allow`(ヘッドレスもこれを読む。プロジェクト単位は `~/.gemini/config/projects/` が優先)。書式は `command(<バイナリ サブコマンド>)`・`read_file(<絶対パス>)`・`write_file(<絶対パス>)`・`mcp(<server>/<tool>)`・`read_url(<ドメイン>)`・`execute_url(<ドメイン>)`(CLI同梱の説明は `*` の全許可を禁じている)。**Web検索 `search_web` は許可ルール不要**(ルール無しで無人実行できた)。**ページ取得 `read_url` はドメインごとのルールが要る**(ルール無しは拒否、`read_url(example.com)` と公式ドキュメントのドメインは取得できた)。
 - 読み取り専用のWeb調査(ヘッドレス): `agents.conf` の `research` に置いてある。許可ルールの `read_url` はドメイン単位でワイルドカードが無く(`*`・`*.com`・無指定は通らない)、hookが `allow` を返しても、`permissionOverrides` を付けても、無人では拒否される(いずれも実機確認 2026-10-07)。そこで `--dangerously-skip-permissions` で動かし、調査ジョブの間だけ有効な PreToolUse hook `agy-job-guard.sh`(拒否 `deny` はこのフラグでも効く)が、Web検索とページ取得以外の全ツール(シェル・ファイル・ブラウザ・MCP)を拒否し、内部アドレス・認証情報つき・秘密らしき文字列を含むURLも拒否する。ガードは失敗時に拒否側へ倒れる(他のhookは通す側)。実機で、取得は通り、`run_command` と `view_file` は拒否された。`~/.gemini/antigravity-cli/settings.json` の許可ルール(`agy-settings-allow`)は、対話のagyでの便宜。
-- 適切用途: AA Coding Agent Index(2026-10-05): Sonnet 5.5 (max) 68.4 / Opus 5.5 (max) 66.0(格付けA、BenchLM転載)。
+- 適切用途: AA Coding Agent Index(BenchLM転載、2026-10-07時点・格付けA): Sonnet 5.5 (max) 68.4 / (xhigh) 62.9 / (high) 55.0 / (medium) 45.9 / (low) 42.1、Opus 5.5 (max) 66.0、Fable 5.1 (max) 62.2、Opus 5 (max) 59.7。Sonnet 5.5 は effort を上げるほど指数が伸びる(medium以下は大きく落ちる)ので、コーディング作業は high 以上。出典: https://benchlm.ai/benchmarks/aacodingagents 。Terminal-Bench 4.0 公式leaderboard(2026-10-01時点・独立): Fable 5.1 (Claude Code) 57.88%(検索結果の要約で確認。ページ本体は未取得)。Anthropic自己申告の Opus 5.5 66.4% は公式boardに無く、独立実行との差は約7ポイント。
+- 適切用途: 軽量・機械的な作業(2026-10-09)。Haiku 5.5(2026-10-07発表)。AA Intelligence Index(独立・格付けA): max 43 / high 38(同じ指数で Sonnet 5.5 は max 56。GPT-6 Luna 38、Gemini 3.8 Flash 41)。AA Terminal-Bench 4.0(独立): 33%(Anthropic自己申告は39%)。AA Coding Agent Index には Haiku 5.5 の掲載を確認できず(2026-10-07の31件に無い)。価格(ベンダー・格付けC): 入力 $0.10 / 出力 $0.50 per 1M(100K未満)。効果: effort を上げるほどトークン消費が増える(max は high の約3倍)ので、定型作業は low〜medium。出典: https://www.latent.space/p/ainews-claude-haiku-55-better-than 、https://the-decoder.com/claude-haiku-5-5-arrives-with-massive-price-cuts-proving-the-ai-pricing-arms-race-is-far-from-over/
 
 ## Codex CLI(`codex`)
 
-<!-- verified agent=codex date=2026-10-06 -->
+<!-- verified agent=codex date=2026-10-09 -->
 <!-- flags agent=codex cmd="exec" : --approve-for-me --model --config --sandbox -->
 
 - 非対話: `codex exec "<prompt>"`、コードレビュー: `codex review`。承認: `--approve-for-me`(単体で使う。`--sandbox` と併用不可=実機確認)、`--dangerously-bypass-approvals-and-sandbox`。
@@ -39,11 +40,11 @@
 - 利用枠: 使用上限に当たると `codex exec` が失敗し、メッセージに復帰時刻が出る。probeは残枠を取得できないので、失敗を検知した側が `~/.agent-state/unavailable/codex.txt` に記録する。`agent-run.sh` はエラー文の解除時刻(`limit-reset.py`)を使い、読めないときだけ6時間後とする。probeと状態行は、解除日時を秒まで表示する。
 - メモリ: `~/.codex/memories/`(`memory_summary.md`・`MEMORY.md` が要約、`raw_memories.md`・`rollout_summaries/` が生ログ。gitリポジトリ)。**確認済み 2026-10-07**
 - 自走: `/goal`(v0.128〜、第三者)。
-- 適切用途: 既存リポジトリの修正・テスト・バグ修正(格付けA: AA Coding Agent Index GPT-6.1 Sol xhigh 62.9 / medium 61.4 / low 57.2、Terminal-Bench 2.0 は GPT-5.5 で82.2%(公式leaderboard 2026-06-07))。他者コードのレビュー: ベンダー実施の比較で適合率70%・再現率30%(格付けB〜C)。
+- 適切用途: 既存リポジトリの修正・テスト・バグ修正(格付けA: AA Coding Agent Index、BenchLM転載2026-10-07: GPT-6.1 Sol xhigh 62.9 / medium 61.4 / high・max 60.1 / low 57.2、GPT-6 Astra (max) 61.6、GPT-6 Sol (max) 56.7)。Terminal-Bench 4.0 公式leaderboard(2026-10-01時点・独立): GPT-6 Astra (Codex) 58.18%で首位(検索結果の要約で確認。ページ本体は未取得)。Terminal-Bench 2.0 は GPT-5.5 で82.2%(公式leaderboard 2026-06-07、旧版)。他者コードのレビュー: ベンダー実施の比較で適合率70%・再現率30%(格付けB〜C)。
 
 ## Antigravity CLI(`agy`)
 
-<!-- verified agent=agy date=2026-10-06 -->
+<!-- verified agent=agy date=2026-10-09 -->
 <!-- flags agent=agy cmd="" : --print --model --effort --dangerously-skip-permissions -->
 
 - 非対話: `agy -p "<prompt>" --model <id>`。承認: `--dangerously-skip-permissions`。モデル名にeffortが内包(`--effort` も可)。一覧: `agy models`。
@@ -52,11 +53,11 @@
 - hook: `~/.gemini/config/hooks.json`(名前付きの集合 `{名前:{イベント:[…]}}`。プロジェクトは `.agents/hooks.json`。**実機確認 2026-10-06**)。入力はcamelCase(`conversationId`・`workspacePaths`・`toolCall.name`/`args`)。シェルは `run_command`(`CommandLine`)、編集は `write_to_file`(`TargetFile`)。`PreToolUse` の出力は `{"decision":"allow|deny|ask","reason":…}`(denyは「tool call denied by pre-tool hook」として返る。`--dangerously-skip-permissions` の実行では `ask` は自動承認される)。`PostToolUse` は空の `{}` だけを返せる(他のキーは読み込みエラー)。モデルへ何かを伝えるのは `PreInvocation`(モデル呼び出しの前。`{"injectSteps":[{"ephemeralMessage":"…"}]}` で注入。`invocationNum` は、ユーザーのターンの最初の呼び出しで0、ツール結果を受けて呼び直すたびに増える。**実機確認 2026-10-07**)と `PostInvocation`(`terminationBehavior: force_continue` も可)。
 - メモリ: 永続メモリは持たない(会話の記録 `~/.gemini/antigravity-cli/brain/`・`conversations/` のみ。`knowledge/` は空)。第三者の記録を参照。**確認 2026-10-07**
 - 読み取り専用のWeb調査(ヘッドレス): 実用的な設定が無い。Webツール(`read_url` 等)ごとに許可ルールが要り、代替の `--dangerously-skip-permissions` はWebの内容を読む無人ジョブには使えない。そのため `agents.conf` に `research` を置いていない。
-- 適切用途: 大規模コンテキスト読解・マルチモーダル・調査(格付けB)。コーディング指数: Gemini 3.8 Flash (high) 41.9、Gemini 4 Argon (high) 63.8(格付けA、後者は環境によっては `agy models` に出ない)。
+- 適切用途: 大規模コンテキスト読解・マルチモーダル・調査(格付けB)。コーディング指数(AA Coding Agent Index、BenchLM転載2026-10-07・格付けA): Gemini 3.8 Flash (high) 41.9(Antigravity SDK での計測)、Gemini 4 Argon (high) 63.8(Antigravity CLI での計測。今回のprobeの `agy models` には出ない)。
 
 ## Muse Code(`muse`)
 
-<!-- verified agent=muse date=2026-10-06 -->
+<!-- verified agent=muse date=2026-10-09 -->
 <!-- flags agent=muse cmd="exec" : --no-foreign-personal-context --approval-mode --disable-approval --yolo --trust-workspace --reasoning-effort --workspace -->
 
 - 非対話: `muse exec "<prompt>"`。承認: `--approval-mode untrusted|on-request|never`、`--disable-approval`(サンドボックス維持)、`--yolo`(両方無効)。workspaceのrules/skillsは `--trust-workspace` で読む。
@@ -66,11 +67,11 @@
 - hook: `<project>/.muse/hooks.json`(`schema_version`・`hooks`・matcherグループの3層)、ユーザーsettings(`~/.config/muse/settings.json` の `hooks`。**実機確認 2026-10-06**、workspaceの信頼は不要)、`managed_hooks_path`。15イベント(Claude互換+LLM呼び出し系)。`UserPromptSubmit` の入力は `hook_event_name`・`prompt`・`session_id`・`turn_id`・`cwd`・`model`・`permission_mode`(**実機確認 2026-10-06**)。拒否は終了コード2または `{"decision":"block"}`。`PreToolUse` の入力は `tool_name`・`tool_input`・`tool_use_id`(第三者実測)。
 - メモリ: 内蔵メモリがある(範囲は personal / personal_project / project=`<repo>/.agents/memory`)。個人用の保存先は公式に公開されておらず、まだ作られてもいない(未ログイン)。`~/.config/muse/memory/`・`~/.local/share/muse/memory/` を候補として `agents.conf` に登録。**未確認 2026-10-07**
 - 読み取り専用のWeb調査(ヘッドレス): `muse exec ... --disable-approval --disable-write --disable-shell --no-foreign-personal-context`(未ログインのため未検証)
-- 適切用途: 長時間のバックグラウンド作業・中断再開(格付けB)、低コスト。コーディング指数: Spark 1.3 (max) 54.3(格付けA)。
+- 適切用途: 長時間のバックグラウンド作業・中断再開(格付けB)、低コスト。コーディング指数(AA Coding Agent Index、BenchLM転載2026-10-07・格付けA): Muse Spark 1.3 (max) 54.3 / (xhigh) 48.3(effortを max にしないと大きく落ちる)。
 
 ## Grok Build(`grok`)
 
-<!-- verified agent=grok date=2026-10-06 -->
+<!-- verified agent=grok date=2026-10-09 -->
 <!-- flags agent=grok cmd="" : --always-approve --model --effort --worktree -->
 
 - 非対話: `grok -p "<prompt>" -m <id>`。承認: `--always-approve`(別名 `--yolo`)。effort: `--effort <level>`。worktree: `-w`。一覧: `grok models`、設定の確認: `grok inspect`。導入: `curl -fsSL https://x.ai/cli/install.sh | bash`。
@@ -78,11 +79,11 @@
 - skills: `~/.grok/skills/`、`./.grok/skills/`、`~/.grok/config.toml` の追加パス。
 - hook: `~/.grok/hooks/*.json`。Claudeの `.claude/settings.json` のhookも読む。拒否は終了コード2。
 - メモリ: 機能がある(`grok memory clear [--workspace|--global|--all]`、`/memory`、`--experimental-memory`)。保存先のパスは公式に公開されていない(markdownファイルで、プロジェクト単位とグローバルの2つの範囲)。`~/.grok/memory/` を候補として `agents.conf` に登録。**未確認 2026-10-07**
-- 適切用途: 並列サブエージェント・plan mode・worktree隔離(格付けC)。コーディング指数: Grok 4.7 (xhigh) 56.3(格付けA)。新規生成・レビューの適性に独立根拠は無い(格付けD)。
+- 適切用途: 並列サブエージェント・plan mode・worktree隔離(格付けC)。コーディング指数(AA Coding Agent Index、BenchLM転載2026-10-07・格付けA): Grok 4.7 (xhigh) 56.3、Grok 4.6 (xhigh) 47.0。新規生成・レビューの適性に独立根拠は無い(格付けD)。
 
 ## 代行先の優先順位
 
-<!-- verified agent=failover date=2026-10-07 -->
+<!-- verified agent=failover date=2026-10-09 -->
 
 Claude Codeが使えないときに、司令塔を代行させる順序。probeで `ready` のものから、上位を選ぶ。
 
@@ -90,11 +91,11 @@ Claude Codeが使えないときに、司令塔を代行させる順序。probe�
 2. agy
 3. Muse(Grokは導入されていれば、適切用途に従う)
 
-根拠(Artificial Analysis Coding Agent Index、BenchLMの転載、2026-10-05時点。格付けA)と、導入・配線の状況:
+根拠(Artificial Analysis Coding Agent Index、BenchLMの転載、2026-10-07時点。格付けA)と、導入・配線の状況:
 
-- Codex: GPT-6.1 Sol (xhigh) 62.9、(medium) 61.4。外部CLIで最上位。
-- agy: 確認時点で選べたモデルでは Gemini 3.8 Flash (high) 41.9。指数はMuseより低いが、導入・認証済みで、共通rules・共有skills・hook(ゲート)の配線を実機確認済み。Gemini 4 Argon (high) 63.8 は、確認時点の `agy models` には出なかった。
-- Muse: Spark 1.3 (max) 54.3。指数はagyより高いが、認証が未完で、ゲートの実機検証も未了のため3番目にしている。
+- Codex: GPT-6.1 Sol (xhigh) 62.9、(medium) 61.4、GPT-6 Astra (max) 61.6。外部CLIで最上位級。Terminal-Bench 4.0 公式leaderboard(2026-10-01時点)でも GPT-6 Astra (Codex) が首位(要約で確認)。
+- agy: 確認時点で選べたモデルでは Gemini 3.8 Flash (high) 41.9。指数はMuseより低いが、導入・認証済みで、共通rules・共有skills・hook(ゲート)の配線を実機確認済み。Gemini 4 Argon (high) 63.8 は、今回のprobeの `agy models` にも出なかった。
+- Muse: Spark 1.3 (max) 54.3(xhigh は 48.3)。指数はagyより高いが、認証が未完(probeは `no-auth`)で、ゲートの実機検証も未了のため3番目にしている。
 - Grok: Grok 4.7 (xhigh) 56.3(未導入)。
 
 指数だけでなく、認証と配線の状況で決めている。状況が変われば入れ替える(例: Museがログイン済みで、ゲートの実機検証が済めば、agyより上にしてよい)。
