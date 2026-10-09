@@ -173,7 +173,11 @@ EOF
   exit 3
 fi
 if [ "$DRY" -eq 1 ]; then echo "(dry-run: 変更なし。変更される行: ${changes}件)"; exit 0; fi
-if [ "$changes" -eq 0 ]; then write_protected; echo "変更なし(すべて最新)"; exit 0; fi
+if [ "$changes" -eq 0 ]; then
+  write_protected; echo "変更なし(すべて最新)"
+  bash "$CFG_DIR/src/hooks/prune-state.sh" || true
+  exit 0
+fi
 if [ "$YES" -eq 0 ]; then
   confirm "上記のうち ${changes} 件を配備しますか?"; rc=$?
   [ "$rc" -eq 0 ] || { [ "$rc" -eq 1 ] && echo "中止しました(変更なし)"; exit 0; }
@@ -209,7 +213,9 @@ done
 
 write_protected
 if [ "$changed" -eq 0 ]; then rm -rf "$BK"; echo "変更なし(すべて最新)"; else
+  python3 "$CFG_DIR/src/hooks/state-history.py" deploy "$STATE_DIR" "$BK" || true
   echo "完了: ${changed}件を配備しました。退避先: $BK(戻す: install.sh -r)"
   say "注意: 動作中のセッションが読み込むhook設定の反映時期はツール次第です。新しいセッションから確実に有効になります。"
 fi
+bash "$CFG_DIR/src/hooks/prune-state.sh" || true
 exit 0

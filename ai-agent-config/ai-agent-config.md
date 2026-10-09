@@ -58,6 +58,8 @@ ai-agent-config/tests/install-test.sh              # install/diff/rollbackの一
 - **他のMacへ:** `git clone`(または `git pull`)して `ai-agent-config/install.sh`。初回は既存のliveファイルが `DRIFT` になるので、`diff-ai-agent-config.sh` で内容を確認してから `install.sh -f`(退避先は `~/.agent-state/backups/`)。
 - 共通ルールを直すときは `src/shared-rules.md` だけを直す(`install.sh` が `~/AGENTS.md` へ反映し、他のエージェントはそのsymlink経由で同じファイルを読む)。
 
+配備・台帳更新・退避整理の履歴は `~/.agent-state/CHANGELOG.md` に日時付きの短い自然文で追記します。配備は変更があったときだけ記録します。配備成功時と台帳調査の通知後に退避を整理し、配備の退避ディレクトリ・台帳の退避・差分それぞれ最新3件を必ず残し、それ以外で7日を超えたものを削除します(`AGENT_STATE_DIR` で状態の場所、`STATE_KEEP_DAYS` で日数を変更可)。
+
 ## プロジェクトへの配置(`project` 行)と、個人用の manifest
 
 プロジェクトごとの指示(`AGENTS.md`)や `.claude/settings.json` のように、「各プロジェクトの中」に置きたいファイルは、`project` 行で配ります。
@@ -76,6 +78,8 @@ ai-agent-config/tests/install-test.sh              # install/diff/rollbackの一
 - **提案(エージェント)**: `--suggest` は、ヒットを `agents.conf` の `ask`(道具なし・書き込みなしの質問用テンプレート)で、導入済みのエージェントに渡し、置き換え案を表で出させます。ファイルは編集しません。**ヒットの周辺の文が外部のモデルに渡る**ので、自分で指示したときだけ動きます。
 - **穴埋め(その Mac のエージェント)**: 公開用に一般化した知識ファイルには、`<自分のSlackユーザーID>` のようなプレースホルダが残ります。`--localise` が `~/.knowledge/*.md` の残りを一覧し、`--localise --agent` は、導入済みのエージェントを対話で起動して、この Mac で分かる値で埋めさせます(分からないものはあなたに質問する)。ローカルの知識ファイルなので、リポジトリには戻りません。
 
+`setup-git-account.sh` は pre-commit にも台帳同期を設置します。`sync-registry-seed.sh` が作業用の正本 `~/.knowledge/ai-agents.md`(`AGENTS_REGISTRY` で変更可)の全文を公開検査し、最大確認日がシードと同日以降なら `src/agents-registry.md` に同期して同じコミットに含めます。live が無い・同一・古い・検査失敗なら同期せず、失敗でもコミットは通します。既存の別の pre-commit は上書きしません。`--dry-run` は予定だけ表示し、`git commit --no-verify` でhookを省略できます。
+
 ## hook(`src/hooks/`)
 
 | スクリプト | 役割 |
@@ -86,6 +90,7 @@ ai-agent-config/tests/install-test.sh              # install/diff/rollbackの一
 | `mark-asked.sh`(PostToolUse) | AskUserQuestionの実行を記録して解除 |
 | `reminder.sh`(UserPromptSubmit) | 初回と10回ごとの委譲リマインド、**初回と3回ごとの状態行(`status-line.sh`)の指示**、毎回の短い範囲確認、通知の表示、`/ofuro` の開始・終了、**初回と5回ごとの「未処理の義務」の通知**と、自動調査ジョブの起動 |
 | `obligations.sh` | 未処理の義務を1行ずつ出力する(台帳の確認から1日以上経過、届いた台帳更新提案、未検討のルール提案、未収穫のメモリ)。リマインドとprobeが使う |
+| `prune-state.sh` | 退避と差分を種類ごとに最新3件と保存期間内の分だけ残し、削除件数を変更履歴へ追記。`--dry-run` は削除予定だけ表示。失敗しても通す |
 | `registry-job.sh` | 毎日、確認日が昨日以前なら自動でWeb調査を起動する。`agent-run.sh` が使えるエージェントで調査し、`registry-apply.py` が適切用途・代行先の優先順位・確認日だけを直接反映する。差分と退避を残し、要確認事項は `~/.agent-state/proposals/` に残す。1日1回まで・同時に1本・ジョブ内からは起動しない・調査できるエージェントが無ければ起動しない |
 | `status-line.sh` | 他のエージェントの状況を1行にする(導入済みのものだけ。使用上限中は解除日時を秒まで)。`reminder.sh` が最初のプロンプトと3回に1回、「この行を応答の末尾に添える」指示として渡す(agy は `UserPromptSubmit` 相当が無いので、`agy-adapter.sh` が `PreInvocation` の `invocationNum` が0のとき(ターンの先頭)を数えて、同じ指示を注入する) |
 | `handoff-exclude.sh` / `handoff-exclude-hook.sh` | `.agent-handoff/`(引き継ぎ記録)をGitに入れないよう、`.git/info/exclude` へ自動で追記する(worktree・サブディレクトリ対応、重複しない)。編集ツールが書いた直後と、プロンプトごとに実行する |
@@ -130,7 +135,7 @@ ai-agent-config/tests/install-test.sh              # install/diff/rollbackの一
 `~/.knowledge/ai-agents.md` は、各エージェントのスペック(コマンド・フラグ・指示ファイル/skills/hookの置き場)と、根拠格付き(A=独立ベンチ/B=第三者/C=公式の機能記述/D=根拠なし)・出典・日付付きの適切用途、代行先の優先順位だけを持つ。更新は、**待たずに自動で**進む。
 
 1. `agents-probe.sh --check` が、台帳が記載するフラグの実在を検査する(消えれば通知)。
-2. 毎日、確認日が昨日以前になると、リマインド(初回と5回ごと)が知らせ、`registry-job.sh` が自動調査を起動する。`agent-run.sh` が `agents.conf` の順で使えるエージェントへ回し、導入済みCLIのモデル一覧と現在の台帳全文を調査に渡す。`registry-apply.py` が適切用途・代行先の優先順位の中身・今日の確認日だけを台帳へ直接反映する。順位・指数・ベンチマークの数値は一次ページをWebFetchして本文で確認する。本文未取得なら「本文は未取得(検索結果の要約で確認)」と明記して格付けを1段階下げる(A→B)。既存の数値は再確認できなくても消さずに残してよい。通知には担当・適用数・却下数・差分と退避の場所が載る。違和感があれば、人が台帳を直接直すか退避から戻す。
+2. 毎日、確認日が昨日以前になると、リマインド(初回と5回ごと)が知らせ、`registry-job.sh` が自動調査を起動する。`agent-run.sh` が `agents.conf` の順で使えるエージェントへ回し、導入済みCLIのモデル一覧と現在の台帳全文を調査に渡す。`registry-apply.py` が適切用途・代行先の優先順位の中身・今日の確認日だけを台帳へ直接反映する。順位・指数・ベンチマークの数値は一次ページをWebFetchして本文で確認する。本文未取得なら「本文は未取得(検索結果の要約で確認)」と明記して格付けを1段階下げる(A→B)。既存の数値は再確認できなくても消さずに残してよい。台帳の適用で退避を作ったときは、適用数・却下数・退避名を変更履歴にも追記する。通知には担当・適用数・却下数・差分と退避の場所が載る。違和感があれば、人が台帳を直接直すか退避から戻す。
 3. コマンド・フラグ・承認方式・指示ファイルの場所の変更は自動反映しない。要確認事項・却下ハンク・不正な候補があれば、報告全文を `~/.agent-state/proposals/` に残す。`refresh-registry` skill が根拠を検証し、ユーザーに確認する。未処理の報告があっても毎日の調査は続き、通知は未処理件数と最新パスを1本にまとめる。検証・確認が終わった報告だけを `~/.agent-state/proposals/done/` へ移す。要確認が無い報告は `~/.agent-state/registry-reports/` に残る。モデル一覧のprobeキャッシュは既定10分(`AGENTS_PROBE_TTL` で変更可)で、各プロンプトのバックグラウンド処理が温める。
 
 ## ルール提案(指示ファイルへの追加・変更)

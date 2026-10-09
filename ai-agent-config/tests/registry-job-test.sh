@@ -7,7 +7,7 @@ trap 'rm -rf "$TEST_TMP"' EXIT
 export HOME="$TEST_TMP" AGENT_STATE_DIR="$TEST_TMP/state"
 unset AGENT_JOB AGENTS_STALE_DAYS AGENTS_REGISTRY AGENT_DELEGATED_BY
 mkdir -p "$HOME/hooks" "$HOME/.knowledge/bin" "$AGENT_STATE_DIR"
-cp "$HERE/../src/hooks/registry-job.sh" "$HERE/../src/hooks/registry-apply.py" "$HOME/hooks/"
+cp "$HERE/../src/hooks/registry-job.sh" "$HERE/../src/hooks/registry-apply.py" "$HERE/../src/hooks/state-history.py" "$HERE/../src/hooks/prune-state.sh" "$HOME/hooks/"
 printf 'print("example")\n' >"$HOME/hooks/agentconf.py"
 cat >"$HOME/hooks/agent-run.sh" <<'STUB'
 #!/bin/bash
@@ -47,6 +47,12 @@ import datetime, pathlib
 PY
 }
 seed
+# Job completion prunes old state only after queuing its notice.
+mkdir -p "$AGENT_STATE_DIR/backups"
+for n in 1 2 3 4; do
+  mkdir "$AGENT_STATE_DIR/backups/2026010100000$n"
+  touch -t "20260101000$n.00" "$AGENT_STATE_DIR/backups/2026010100000$n"
+done
 # Yesterday is stale by default, with no override, and maybe launches a job.
 bash "$HOME/hooks/registry-job.sh" maybe
 for i in {1..50}; do
@@ -54,6 +60,14 @@ for i in {1..50}; do
   sleep .1
 done
 grep -q '新用途' "$HOME/.knowledge/ai-agents.md"
+# The lock is released after pruning, so wait for the complete job.
+for i in {1..50}; do
+  [ ! -d "$AGENT_STATE_DIR/registry-job.lock" ] && break
+  sleep .1
+done
+[ ! -d "$AGENT_STATE_DIR/backups/20260101000001" ]
+grep -q '退避を整理' "$AGENT_STATE_DIR/CHANGELOG.md"
+grep -q '台帳を自動更新' "$AGENT_STATE_DIR/CHANGELOG.md"
 grep -q '台帳を自動更新しました' "$AGENT_STATE_DIR/alerts/registry-job.txt"
 [ ! -d "$AGENT_STATE_DIR/proposals" ]
 [ -s "$AGENT_STATE_DIR/registry-reports/registry-$(date +%Y%m%d).md" ]
@@ -86,6 +100,14 @@ for i in {1..50}; do
 done
 [ "$(wc -l <"$HOME/probe-calls")" -gt "$calls" ]
 grep -q '新用途' "$HOME/.knowledge/ai-agents.md"
+# The lock is released after pruning, so wait for the complete job.
+for i in {1..50}; do
+  [ ! -d "$AGENT_STATE_DIR/registry-job.lock" ] && break
+  sleep .1
+done
+[ ! -d "$AGENT_STATE_DIR/backups/20260101000001" ]
+grep -q '退避を整理' "$AGENT_STATE_DIR/CHANGELOG.md"
+grep -q '台帳を自動更新' "$AGENT_STATE_DIR/CHANGELOG.md"
 grep -q "未処理の要確認の報告が 2 件あります(最新: $proposal)" "$AGENT_STATE_DIR/alerts/registry-job.txt"
 [ "$(wc -l <"$AGENT_STATE_DIR/alerts/registry-job.txt")" -eq 1 ]
 [ "$(find "$AGENT_STATE_DIR/alerts" -type f | wc -l)" -eq 1 ]

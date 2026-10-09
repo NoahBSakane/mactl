@@ -45,6 +45,11 @@ def run(candidate, marker=True):
     report.write_text('<<<LEDGER\n' + candidate + 'LEDGER>>>\n## 要確認\n' if marker else candidate)
     result = subprocess.run([sys.executable, script, str(ledger), str(report), str(output)], capture_output=True, text=True)
     assert result.returncode == 0, result
+    if ledger.read_text() != base:
+        history = (output / 'CHANGELOG.md').read_text()
+        assert '台帳を自動更新: 適用' in history and '・却下' in history and '(退避 ai-agents-' in history, history
+    else:
+        assert not (output / 'CHANGELOG.md').exists()
     return ledger.read_text(), result.stdout, output
 
 candidate = base.replace('架空の従来用途', '架空の新用途').replace('1. Example', '1. Example (更新)').replace(str(yesterday), str(today)).replace('--safe', '--unsafe')
