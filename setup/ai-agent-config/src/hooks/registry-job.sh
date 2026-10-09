@@ -104,7 +104,8 @@ PYREVIEW
     else
       notice "台帳の自動調査ジョブが、どのエージェントでも実行できませんでした($(tail -1 "$err" 2>/dev/null | head -c 300))。翌日に再試行します。"
       rm -f "$out" "$work/.registry-$today.prompt"
-    fi ;;
+    fi
+    [ ! -f "$HOOK_DIR/prune-state.sh" ] || bash "$HOOK_DIR/prune-state.sh" || true ;;
   *) echo "usage: $0 maybe|run" >&2; exit 2 ;;
 esac
 exit 0

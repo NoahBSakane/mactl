@@ -53,3 +53,27 @@ HOOK
 else
   echo "既存の pre-push hook があるので、公開前の検査は設定しませんでした: $hook" >&2
 fi
+
+# pre-commit: bring the public registry seed up to date in the same commit.
+hook="$(g rev-parse --git-path hooks/pre-commit)"; case "$hook" in /*) ;; *) hook="$repo/$hook" ;; esac
+if [ ! -e "$hook" ] || grep -q '^# installed by setup-git-account.sh: sync-registry-seed$' "$hook" 2>/dev/null; then
+  mkdir -p "$(dirname "$hook")"
+  cat >"$hook" <<'HOOK'
+#!/bin/bash
+# installed by setup-git-account.sh: sync-registry-seed
+top="$(git rev-parse --show-toplevel)" || exit 0
+f="$(git -C "$top" ls-files '*sync-registry-seed.sh' | head -1)"
+[ -n "$f" ] && [ -f "$top/$f" ] || exit 0
+seed="$(dirname "$f")/src/agents-registry.md"
+before="$(git -C "$top" hash-object -- "$seed" 2>/dev/null)"
+bash "$top/$f"
+after="$(git -C "$top" hash-object -- "$seed" 2>/dev/null)"
+if [ -f "$top/$seed" ] && [ "$before" != "$after" ]; then
+  git -C "$top" add -- "$seed"
+fi
+exit 0
+HOOK
+  chmod +x "$hook"; echo "pre-commit の台帳同期を設定しました: $hook"
+else
+  echo "既存の pre-commit hook があるので、台帳同期は設定しませんでした: $hook" >&2
+fi

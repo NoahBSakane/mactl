@@ -9,6 +9,18 @@ import shutil
 import sys
 import tempfile
 
+from importlib.util import module_from_spec, spec_from_file_location
+
+
+def record_history(state, message):
+    try:
+        spec = spec_from_file_location("state_history", Path(__file__).with_name("state-history.py"))
+        history = module_from_spec(spec)
+        spec.loader.exec_module(history)
+        history.append(state, message)
+    except Exception as exc:
+        print(f"状態履歴を記録できません: {type(exc).__name__}", file=sys.stderr)
+
 VERIFIED = re.compile(r'<!-- verified agent=([^\s]+) date=(\d{4}-\d{2}-\d{2}) -->\s*$')
 HEADING = re.compile(r'^ {0,3}#{1,6}\s')
 
@@ -130,6 +142,7 @@ def main():
             with (diff_dir / f'registry-{datetime.date.today():%Y%m%d}.diff').open('a') as handle:
                 handle.write(diff)
             os.replace(temp, registry)
+            record_history(output, f"台帳を自動更新: 適用{count}・却下{len(reasons)}(退避 {backup.stem})。")
         finally:
             if os.path.exists(temp):
                 os.unlink(temp)

@@ -172,6 +172,17 @@ out="$(PATH="$nojq" /bin/bash "$CFG/install.sh" -n 2>&1)"; rc=$?
 [ "$rc" = 1 ] && grep -q "jq" <<<"$out" && grep -q "brew install jq" <<<"$out" && ok || bad "install.sh stops with the missing tool and how to get it (rc=$rc)"
 rm -rf "$nojq"
 
+grep -q '配備: .*を更新(退避 ' "$HOME/.agent-state/CHANGELOG.md" && ok || bad "install records deployment history"
+history_lines=$(wc -l <"$HOME/.agent-state/CHANGELOG.md")
+# A successful unchanged install still runs housekeeping, without a deployment event.
+for n in 1 2 3 4; do
+  mkdir -p "$HOME/.agent-state/backups/2020010100000$n"
+  touch -t "20200101000$n.00" "$HOME/.agent-state/backups/2020010100000$n"
+done
+bash "$CFG/install.sh" -y >/dev/null 2>&1
+[ ! -d "$HOME/.agent-state/backups/20200101000001" ] && ok || bad "successful install prunes old backups"
+[ "$(grep -c '配備: ' "$HOME/.agent-state/CHANGELOG.md")" = "$(head -n "$history_lines" "$HOME/.agent-state/CHANGELOG.md" | grep -c '配備: ')" ] && ok || bad "unchanged install adds no deployment history"
+
 # 8. rollback of the first install brings the old machine back
 first="$(ls -1 "$HOME/.agent-state/backups" | head -1)"
 bash "$CFG/install.sh" -r "$first" -y >/dev/null 2>&1

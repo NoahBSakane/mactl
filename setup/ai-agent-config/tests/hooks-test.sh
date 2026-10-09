@@ -820,5 +820,8 @@ n=$(wc -l <"$AGENT_STATE_DIR/delegation-log.jsonl" | tr -d ' ')
 bash "$HERE/registry-apply-test.sh" && ok || bad "registry-apply fixtures"
 bash "$HERE/registry-job-test.sh" && ok || bad "registry-job fixtures"
 
+bash "$HERE/prune-state-test.sh" && ok || bad "prune-state fixtures"
+bash "$HERE/sync-registry-seed-test.sh" && ok || bad "sync-registry-seed fixtures"
+
 echo "passed=$pass failed=$fail"
 exit "$fail"
