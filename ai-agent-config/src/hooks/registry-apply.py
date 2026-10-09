@@ -62,7 +62,8 @@ def unsafe(line):
     if re.search(r'http://|\$\(|rm\s+-rf|curl\s|\|\s*sh\b|ignore previous|以前の指示を無視', line, re.I):
         return '安全でないURLまたは注入文です'
     for command in re.findall(r'`([^`]+)`', line):
-        if re.search(r'\s|[;|&<>]', command):
+        # a plain `agy models` is ordinary; a pipe, a redirect, a chain or a risky first word is not
+        if re.search(r'[;|&<>]', command) or re.match(r'\s*(?:sudo\s+)?(?:echo|rm|curl|wget|sh|bash|zsh|eval|chmod|chown|dd|nc|ncat|ssh|scp|python3?|perl|ruby|node|osascript|base64|xargs|tee|mkfs|diskutil|kill)\b', command):
             return 'バッククォート内にコマンド風の記述があります'
     return None
 
