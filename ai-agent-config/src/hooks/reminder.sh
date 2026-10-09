@@ -76,6 +76,10 @@ fi
 ( bash "$HOOK_DIR/handoff-exclude.sh" "$(jget .cwd)" >/dev/null 2>&1 & ) >/dev/null 2>&1
 # --- has a usage limit been lifted early? (background; limit-check.sh rate-limits itself) ---
 if [ -z "${AGENT_JOB:-}" ]; then ( bash "$HOOK_DIR/limit-check.sh" >/dev/null 2>&1 & ) >/dev/null 2>&1; fi
+# --- warm the short-lived model cache on every prompt ---
+if [ -z "${AGENT_JOB:-}" ] && [ -f "$HOME/.knowledge/bin/agents-probe.sh" ]; then
+  ( bash "$HOME/.knowledge/bin/agents-probe.sh" >/dev/null 2>&1 & ) >/dev/null 2>&1
+fi
 # --- obligations: deterministic reminders of pending work, + the background registry research ---
 # First prompt and every 5th. Never blocks; the agent handles them at a natural pause.
 if [ -z "${AGENT_JOB:-}" ] && ! ofuro_active && { [ "$count" -eq 1 ] || [ $(( count % 5 )) -eq 0 ]; }; then

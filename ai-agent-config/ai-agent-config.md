@@ -10,7 +10,7 @@ Claude Code / Codex CLI / Antigravity CLI(`agy`)/ Muse Code / Grok Build とい�
 
 1. **repoが正本、liveは配備物。** 配備するものは全て [manifest.tsv](manifest.tsv) に1行ずつ書き、install・diff・reconcile は同じmanifestを見る。manifestに無いものは管理しない。
 2. **同一階層に `CLAUDE.md` と `AGENTS.md` は各1つまで。** このリポジトリのルートの2つは、このrepoで作業するための小さな指示で、グローバル指示のスナップショットではない(スナップショットは `src/` に、自動で読み込まれない名前で置く)。
-3. **マシン固有の事実は保存しない。** 導入状況・バージョン・認証・モデル一覧は `agents-probe.sh` が毎回各CLIから取得する(出力は6時間だけキャッシュ)。
+3. **マシン固有の事実は保存しない。** 導入状況・バージョン・認証・モデル一覧は `agents-probe.sh` が毎回各CLIから取得する(出力は既定10分だけキャッシュし、各プロンプトで裏から温める)。
 4. **常時読み込む指示は最小に。** 手順は skills(必要なときだけ読み込まれる)、仕様と評判は台帳に置く。
 5. **hookは「止める」より「気づかせる」。** 内部エラーは常に通す(fail-open)。拒否できるのは明示的な終了コード2だけで、解除は1回の質問、またはユーザーの次のプロンプト。
 
@@ -85,8 +85,8 @@ ai-agent-config/tests/install-test.sh              # install/diff/rollbackの一
 | `secret-scan.sh`(PreToolUse) | 外部CLIへ渡すコマンド・プロンプトに秘密情報(鍵・トークン等)があれば拒否 |
 | `mark-asked.sh`(PostToolUse) | AskUserQuestionの実行を記録して解除 |
 | `reminder.sh`(UserPromptSubmit) | 初回と10回ごとの委譲リマインド、**初回と3回ごとの状態行(`status-line.sh`)の指示**、毎回の短い範囲確認、通知の表示、`/ofuro` の開始・終了、**初回と5回ごとの「未処理の義務」の通知**と、自動調査ジョブの起動 |
-| `obligations.sh` | 未処理の義務を1行ずつ出力する(台帳の確認が14日超、届いた台帳更新提案、未検討のルール提案、未収穫のメモリ)。リマインドとprobeが使う |
-| `registry-job.sh` | 台帳が14日を超えると、**自動で**調査を起動する。読み取り専用のWeb調査を、`agent-run.sh` が使えるエージェントで実行し、提案レポートを `~/.agent-state/proposals/` に作る。1日1回まで・同時に1本・ジョブ内からは起動しない・調査できるエージェントが無ければ起動しない |
+| `obligations.sh` | 未処理の義務を1行ずつ出力する(台帳の確認から1日以上経過、届いた台帳更新提案、未検討のルール提案、未収穫のメモリ)。リマインドとprobeが使う |
+| `registry-job.sh` | 毎日、確認日が昨日以前なら自動でWeb調査を起動する。`agent-run.sh` が使えるエージェントで調査し、`registry-apply.py` が適切用途・代行先の優先順位・確認日だけを直接反映する。差分と退避を残し、要確認事項は `~/.agent-state/proposals/` に残す。1日1回まで・同時に1本・ジョブ内からは起動しない・調査できるエージェントが無ければ起動しない |
 | `status-line.sh` | 他のエージェントの状況を1行にする(導入済みのものだけ。使用上限中は解除日時を秒まで)。`reminder.sh` が最初のプロンプトと3回に1回、「この行を応答の末尾に添える」指示として渡す(agy は `UserPromptSubmit` 相当が無いので、`agy-adapter.sh` が `PreInvocation` の `invocationNum` が0のとき(ターンの先頭)を数えて、同じ指示を注入する) |
 | `handoff-exclude.sh` / `handoff-exclude-hook.sh` | `.agent-handoff/`(引き継ぎ記録)をGitに入れないよう、`.git/info/exclude` へ自動で追記する(worktree・サブディレクトリ対応、重複しない)。編集ツールが書いた直後と、プロンプトごとに実行する |
 | `doctor.sh`(リポジトリ直下の `ai-agent-config/`) | 前提のツール(必須: jq・python3 3.8+・git・SHA-256・awk・sed・find、任意: gh・node)の点検と、足りないものの入れ方の案内。`install.sh` が最初に `--required` で呼び、足りなければ止める |
@@ -130,8 +130,8 @@ ai-agent-config/tests/install-test.sh              # install/diff/rollbackの一
 `~/.knowledge/ai-agents.md` は、各エージェントのスペック(コマンド・フラグ・指示ファイル/skills/hookの置き場)と、根拠格付き(A=独立ベンチ/B=第三者/C=公式の機能記述/D=根拠なし)・出典・日付付きの適切用途、代行先の優先順位だけを持つ。更新は、**待たずに自動で**進む。
 
 1. `agents-probe.sh --check` が、台帳が記載するフラグの実在を検査する(消えれば通知)。
-2. 確認日が14日を超えると、リマインド(初回と5回ごと)が「未処理の義務」として知らせ続け、同時に `registry-job.sh` が**自動で調査ジョブを起動**する。ジョブは `agent-run.sh` が、`agents.conf` の順(今は Claude → Codex → Muse)で、使えるエージェントに回す。あるエージェントが落ちている・使用上限・未ログインなら、**次のエージェントへ回る**。提案レポートが `~/.agent-state/proposals/` に届き(どのエージェントが調査したかも記録される)、通知が出る。
-3. 届いた提案は、`refresh-registry` skill が検証して台帳へ反映する(適切用途は自動で反映してよい。コマンド・フラグ・承認方式の変更は、根拠を示してユーザーに確認する)。反映が終わるまで、義務の通知は続く。作業は止めない。
+2. 毎日、確認日が昨日以前になると、リマインド(初回と5回ごと)が知らせ、`registry-job.sh` が自動調査を起動する。`agent-run.sh` が `agents.conf` の順で使えるエージェントへ回し、導入済みCLIのモデル一覧と現在の台帳全文を調査に渡す。`registry-apply.py` が適切用途・代行先の優先順位の中身・今日の確認日だけを台帳へ直接反映する。通知には担当・適用数・却下数・差分と退避の場所が載る。違和感があれば、人が台帳を直接直すか退避から戻す。
+3. コマンド・フラグ・承認方式・指示ファイルの場所の変更は自動反映しない。要確認事項・却下ハンク・不正な候補があれば、報告全文を `~/.agent-state/proposals/` に残す。`refresh-registry` skill が根拠を検証し、ユーザーに確認する。処理まで次の調査は起動しない。要確認が無い報告は `~/.agent-state/registry-reports/` に残る。モデル一覧のprobeキャッシュは既定10分(`AGENTS_PROBE_TTL` で変更可)で、各プロンプトのバックグラウンド処理が温める。
 
 ## ルール提案(指示ファイルへの追加・変更)
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Prints one line per pending obligation (nothing when there is none). Used by the reminder hook
 # (so agents are told, deterministically, without having to run anything) and by agents-probe.sh.
-#   - the registry has not been re-verified for more than 14 days
+#   - the registry has not been re-verified for at least one day
 #   - a registry update proposal from the background research job waits for review
 #   - rule proposals are waiting for triage
 #   - agent memory has new/changed files nobody has looked at
@@ -10,18 +10,18 @@
 STATE="${AGENT_STATE_DIR:-$HOME/.agent-state}"
 REGISTRY="${AGENTS_REGISTRY:-$HOME/.knowledge/ai-agents.md}"
 PROPOSALS="${RULE_PROPOSALS:-$HOME/.knowledge/rule-proposals.md}"
-STALE_DAYS="${AGENTS_STALE_DAYS:-14}"
+STALE_DAYS="${AGENTS_STALE_DAYS:-1}"
 skip_registry=0; [ "${1:-}" = "--skip-registry" ] && skip_registry=1
 
 if [ "$skip_registry" -eq 0 ] && [ -f "$REGISTRY" ]; then
   worst=""; worst_age=0
   while read -r agent date; do
     [ -n "$date" ] || continue
-    age=$(( ( $(date +%s) - $(date -j -f %Y-%m-%d "$date" +%s 2>/dev/null || echo 0) ) / 86400 ))
+    age=$(( ( $(date +%s) - $(date -j -f "%Y-%m-%d %H:%M:%S" "$date 00:00:00" +%s 2>/dev/null || echo 0) ) / 86400 ))
     if [ "$age" -gt "$worst_age" ]; then worst_age="$age"; worst="$agent"; fi
   done < <(sed -nE 's/.*<!-- verified agent=([a-z]+) date=([0-9-]+) -->.*/\1 \2/p' "$REGISTRY")
-  if [ "$worst_age" -gt "$STALE_DAYS" ]; then
-    echo "台帳の確認が${STALE_DAYS}日を超えています(最も古い: ${worst}、${worst_age}日)。下の更新提案があればそれを検証して反映し、無ければ refresh-registry skill を実行してください(作業は止めない)。"
+  if [ "$worst_age" -ge "$STALE_DAYS" ]; then
+    echo "台帳の確認が${STALE_DAYS}日以上経過しています(最も古い: ${worst}、${worst_age}日)。毎日の自動調査で更新します。要確認の提案や差分に違和感があれば refresh-registry skill で確認してください(作業は止めない)。"
   fi
 fi
 

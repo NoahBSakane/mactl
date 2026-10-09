@@ -10,7 +10,7 @@ TMP_HOME="$(mktemp -d)"
 trap 'rm -rf "$TMP_HOME"' EXIT
 export HOME="$TMP_HOME" AGENT_STATE_DIR="$TMP_HOME/.agent-state" AGENTS_HOOKS_DIR="$HOOKS"
 export CODEX_HOME="$TMP_HOME/codex" AGY_LOG_DIR="$TMP_HOME/agy-log"
-unset AGENT_DELEGATED_BY
+unset AGENT_DELEGATED_BY AGENT_JOB
 # Never call a real agent from a test: same tool/exec data as agents.conf, but no headless/interactive templates
 SAFE_CONF="$TMP_HOME/agents.conf"
 sed -e 's/^research = .*/research =/' -e 's/^interactive = .*/interactive =/' -e 's/^ping = .*/ping =/' -e 's/^ask = .*/ask =/' -e 's/^judge = .*/judge =/' "$HOOKS/agents.conf" >"$SAFE_CONF"
@@ -245,7 +245,7 @@ printf '## a\n\n- 状態: 未検討\n\n## b\n\n- 状態: 未検討\n\n## c\n\n- 
 s=$(new_sid)
 run reminder.sh "$(jq -cn --arg s "$s" '{session_id:$s,hook_event_name:"UserPromptSubmit",prompt:"hi",prompt_id:"a"}')" AGENTS_CONF=/nonexistent
 case "$OUT" in *"未検討のルール提案が 2 件"*) ok ;; *) bad "reminder lists pending rule proposals" ;; esac
-case "$OUT" in *"台帳の確認が14日を超えています"*) ok ;; *) bad "reminder lists the stale registry" ;; esac
+case "$OUT" in *"台帳の確認が1日以上経過しています"*) ok ;; *) bad "reminder lists the stale registry" ;; esac
 run reminder.sh "$(jq -cn --arg s "$s" '{session_id:$s,hook_event_name:"UserPromptSubmit",prompt:"again",prompt_id:"b"}')"
 case "$OUT" in *"未処理の義務"*) bad "obligations are not repeated on the 2nd prompt" ;; *) ok ;; esac
 for i in 3 4 5; do run reminder.sh "$(jq -cn --arg s "$s" --arg i "$i" '{session_id:$s,hook_event_name:"UserPromptSubmit",prompt:"p",prompt_id:$i}')"; done
@@ -809,6 +809,10 @@ run logger.sh "$(bashpl "$s" 'codex exec "x"')"
 run logger.sh "$(bashpl "$s" 'echo "codex exec x"')"
 n=$(wc -l <"$AGENT_STATE_DIR/delegation-log.jsonl" | tr -d ' ')
 [ "$n" = 1 ] && ok || bad "logger records only real launches (got $n lines)"
+
+# Registry safety and background warming fixtures (each isolates its own HOME).
+bash "$HERE/registry-apply-test.sh" && ok || bad "registry-apply fixtures"
+bash "$HERE/registry-job-test.sh" && ok || bad "registry-job fixtures"
 
 echo "passed=$pass failed=$fail"
 exit "$fail"
